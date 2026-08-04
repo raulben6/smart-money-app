@@ -328,6 +328,20 @@ export function TradeModal(props: TradeModalProps) {
     close()
   }
 
+  /**
+   * `JournalSection` se monta con `display:none` cuando su pestaña no está activa — en modo
+   * editar, `tab` arranca en 0 (Datos), así que un stash de recuperación detectado al montar
+   * (ver `JournalSection`'s mount effect) quedaría en un subárbol oculto y la barra
+   * "Restaurar/Descartar" nunca llegaría a verse. Mismo patrón que ya usa `captureWarning`
+   * más arriba para saltar a la pestaña Bitácora — la diferencia es que esa detección puede
+   * hacerse de forma síncrona en el render (viene de `searchParams`) mientras que esta solo
+   * se sabe tras un efecto de montaje que lee `localStorage` (no hay forma SSR-safe de
+   * saberlo antes), así que hay un parpadeo de un frame Datos->Bitácora en vez de cero.
+   */
+  function handleStashDetected() {
+    if (!isCreate) setTab(1)
+  }
+
   function updateField(name: TradeFieldName, value: string) {
     setFieldErrors((prev) => {
       if (!prev[name]) return prev
@@ -608,6 +622,7 @@ export function TradeModal(props: TradeModalProps) {
       notice={captureWarning ? CAPTURE_WARNING_MSG : null}
       onFlushFailure={setFlushFailures}
       journalUpdatedAt={detail?.journalUpdatedAt ?? null}
+      onStashDetected={handleStashDetected}
     />
   )
 
