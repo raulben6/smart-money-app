@@ -1,19 +1,11 @@
 import { getDb } from '@/lib/db'
 import { getTradeDetail } from '@/lib/db/queries/trades'
 import { isValidUuid } from '@/lib/validation/uuid'
+import { todayLocalISO } from '@/lib/format'
 import { TradeModal, type EditableTrade } from './TradeModal'
 import { EMPTY_JOURNAL, type CapturePhase, type ExistingCapture, type JournalFormState } from './JournalSection'
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
-
-/** 'YYYY-MM-DD' de hoy en hora local (nunca `toISOString`, que puede desplazar el día en zonas negativas). */
-function todayLocal(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 /**
  * Puerta de entrada del modal de operación: server component que decide, a partir de los
@@ -98,7 +90,7 @@ export async function TradeModalGate({
   }
 
   if (searchParams.nuevo) {
-    const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayLocal()
+    const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayLocalISO()
     return <TradeModal key="create" mode="create" defaultDate={fecha} />
   }
 

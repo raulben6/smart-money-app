@@ -1,6 +1,5 @@
+import { MONTH_NAMES_ES_SHORT } from '@/lib/format'
 import type { TradePoint } from './types'
-
-const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 // tradeDate viene como 'YYYY-MM-DD'. Se parsea con split('-') — NUNCA
 // new Date(str), que interpreta el string como UTC y puede desplazar el día
@@ -51,6 +50,6 @@ export function monthlyAggregates(
       const d = parseTradeDate(t.tradeDate)
       if (d.year === year && d.month === month) net += t.pnlUsd
     }
-    return { label: MONTH_LABELS[month - 1], net }
+    return { label: MONTH_NAMES_ES_SHORT[month - 1], net }
   })
 }

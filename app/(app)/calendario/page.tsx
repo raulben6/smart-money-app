@@ -3,15 +3,11 @@ import { requireUser } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import { listTrades } from '@/lib/db/queries/trades'
 import { calendarAggregates } from '@/lib/metrics/periods'
+import { MONTH_NAMES_ES } from '@/lib/format'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { MonthSummary } from '@/components/calendar/MonthSummary'
 import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
-
-const MONTH_NAMES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-]
 
 /** Año/mes válidos desde `searchParams` (enteros, año 2000-2100, mes 1-12); si faltan o son inválidos, el mes actual local. */
 function resolveYearMonth(y: string | undefined, m: string | undefined): { year: number; month: number } {
@@ -49,7 +45,7 @@ export default async function CalendarioPage({
 
   const prev = shiftMonth(year, month, -1)
   const next = shiftMonth(year, month, 1)
-  const monthLabel = `${MONTH_NAMES[month - 1]} ${year}`
+  const monthLabel = `${MONTH_NAMES_ES[month - 1]} ${year}`
 
   return (
     <>

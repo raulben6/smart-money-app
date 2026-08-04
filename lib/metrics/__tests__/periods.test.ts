@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { calendarAggregates, monthlyAggregates } from '../periods'
-import { money, signedMoney, pct } from '../../format'
+import { money, signedMoney, pct, todayLocalISO, formatDayMonth, formatLongDate } from '../../format'
 import type { TradePoint } from '../types'
 
 describe('calendarAggregates', () => {
@@ -107,5 +107,30 @@ describe('format', () => {
 
   it('pct acepta dígitos explícitos', () => {
     expect(pct(2.909090909090909, 2)).toBe('2.91%')
+  })
+
+  it('formatDayMonth: "D mes" corto en minúsculas, parseado con split (no new Date)', () => {
+    expect(formatDayMonth('2026-08-03')).toBe('3 ago')
+    expect(formatDayMonth('2026-01-01')).toBe('1 ene')
+    expect(formatDayMonth('2025-12-31')).toBe('31 dic')
+  })
+
+  it('formatDayMonth: cadena vacía -> cadena vacía', () => {
+    expect(formatDayMonth('')).toBe('')
+  })
+
+  it('formatLongDate: "D de mes, AAAA" completo en minúsculas', () => {
+    expect(formatLongDate('2026-08-03')).toBe('3 de agosto, 2026')
+    expect(formatLongDate('2026-01-15')).toBe('15 de enero, 2026')
+    expect(formatLongDate('2025-12-31')).toBe('31 de diciembre, 2025')
+  })
+
+  it('formatLongDate: entrada sin forma de fecha ISO se devuelve tal cual', () => {
+    expect(formatLongDate('')).toBe('')
+    expect(formatLongDate('no-es-fecha')).toBe('no-es-fecha')
+  })
+
+  it('todayLocalISO: devuelve YYYY-MM-DD (formato, no depende del reloj del sistema)', () => {
+    expect(todayLocalISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })

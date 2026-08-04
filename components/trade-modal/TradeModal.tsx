@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { z } from 'zod'
 import { createTrade, removeTrade, updateTrade } from '@/lib/actions/trades'
 import { uploadCapture } from '@/lib/actions/captures'
+import { formatLongDate } from '@/lib/format'
 import {
   DATOS_FIELDS,
   EDIT_TABS,
@@ -28,18 +29,6 @@ import {
 const CAPTURE_WARNING_MSG = 'La operación se guardó, pero una captura falló. Puedes reintentarla al editar.'
 const ERROR_INESPERADO = 'Ocurrió un error inesperado. Intenta de nuevo.'
 const ERROR_GUARDANDO_BITACORA = 'No se pudo guardar la bitácora. Intenta de nuevo antes de cerrar.'
-
-const MONTH_NAMES_LOWER = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-]
-
-/** '2026-08-03' -> '3 de agosto, 2026'. Devuelve la entrada tal cual si no tiene forma de fecha. */
-function formatLongDate(ymd: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd
-  const [y, m, d] = ymd.split('-').map(Number)
-  return `${d} de ${MONTH_NAMES_LOWER[m - 1]}, ${y}`
-}
 
 /** Trade + relaciones ya convertidas a un objeto plano y serializable para pasar del Gate (server) a este client component. */
 export interface EditableTrade {

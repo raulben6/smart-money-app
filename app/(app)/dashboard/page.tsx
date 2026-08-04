@@ -6,6 +6,7 @@ import type { DbTrade } from '@/lib/db/schema'
 import { computeSummary } from '@/lib/metrics/summary'
 import { equityPoints, buildLinePath } from '@/lib/metrics/equity'
 import { monthlyAggregates } from '@/lib/metrics/periods'
+import { formatDayMonth } from '@/lib/format'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { HeroStats } from '@/components/dashboard/HeroStats'
 import { EquityCurve } from '@/components/dashboard/EquityCurve'
@@ -15,7 +16,6 @@ import { MonthlyBars } from '@/components/dashboard/MonthlyBars'
 import { RecentTrades } from '@/components/dashboard/RecentTrades'
 import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
 
-const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const EQUITY_WINDOW_DAYS = 30
 
 /** 'YYYY-MM-DD' con partes de fecha locales (nunca toISOString, que desplaza el día en zonas negativas). */
@@ -24,13 +24,6 @@ function toYmd(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
-}
-
-/** '2026-08-01' -> '1 ago'. */
-function formatTick(ymd: string): string {
-  if (!ymd) return ''
-  const [, month, day] = ymd.split('-').map(Number)
-  return `${day} ${MONTHS_ES[month - 1]}`
 }
 
 /** Últimos `n` meses calendario (incluye el actual), más antiguo primero. */
@@ -105,9 +98,9 @@ function DashboardBody({
   const { line, area } = buildLinePath(points.map((p) => p.balance), 720, 220)
   const periodNet = computeSummary(equitySource, equityBaseline).netPnl
   const ticks: [string, string, string] = [
-    formatTick(points[0]?.date ?? ''),
-    formatTick(points[Math.floor((points.length - 1) / 2)]?.date ?? ''),
-    formatTick(points[points.length - 1]?.date ?? ''),
+    formatDayMonth(points[0]?.date ?? ''),
+    formatDayMonth(points[Math.floor((points.length - 1) / 2)]?.date ?? ''),
+    formatDayMonth(points[points.length - 1]?.date ?? ''),
   ]
 
   const months = monthlyAggregates(trades, lastMonths(8, now))

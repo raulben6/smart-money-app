@@ -1,12 +1,8 @@
 import Link from 'next/link'
 import type { DbTrade } from '@/lib/db/schema'
-import { signedMoney } from '@/lib/format'
+import { signedMoney, MONTH_NAMES_ES } from '@/lib/format'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const MONTH_NAMES_LOWER = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-]
 
 type DayAggregate = { pnl: number; count: number }
 
@@ -68,7 +64,7 @@ export function MonthGrid({
   const firstIds = firstTradeIdByDay(trades, year, month)
   const daysInMonth = new Date(year, month, 0).getDate()
   const offset = (new Date(year, month - 1, 1).getDay() + 6) % 7
-  const monthNameLower = MONTH_NAMES_LOWER[month - 1]
+  const monthNameLower = MONTH_NAMES_ES[month - 1].toLowerCase()
 
   return (
     <div>
