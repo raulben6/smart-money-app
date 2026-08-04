@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { z } from 'zod'
 import { createTrade, removeTrade, updateTrade } from '@/lib/actions/trades'
+import { uploadCapture } from '@/lib/actions/captures'
 import {
   DATOS_FIELDS,
   EDIT_TABS,
@@ -15,6 +16,16 @@ import {
   stepForField,
 } from './steps'
 import { DirectionToggle, FieldGrid, FormField, SectionTitle, type FormState, type TradeFieldName } from './fields'
+import {
+  EMPTY_JOURNAL,
+  JournalSection,
+  type CapturePhase,
+  type ExistingCapture,
+  type JournalFormState,
+  type JournalSectionHandle,
+} from './JournalSection'
+
+const CAPTURE_WARNING_MSG = 'La operación se guardó, pero una captura falló. Puedes reintentarla al editar.'
 
 const MONTH_NAMES_LOWER = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -52,6 +63,8 @@ export interface EditableTrade {
   marketConditions: string | null
   entryType: string | null
   confirmations: string | null
+  journal: JournalFormState
+  captures: ExistingCapture[]
 }
 
 const EMPTY_FORM: FormState = {
@@ -117,8 +130,14 @@ type TradeModalProps = { mode: 'create'; defaultDate: string } | { mode: 'edit';
 /**
  * Modal de operación. Crear = wizard de 4 pasos (Datos/Riesgo y resultado/Estrategia/
  * Bitácora); editar = 2 pestañas (Datos [= Datos+Riesgo+Estrategia apiladas] / Bitácora).
- * El paso/pestaña "Bitácora" es un placeholder en esta tarea — Task 14 lo reemplaza; no se
- * envía `journalRaw` a `createTrade` todavía. Ver mockup 408-546.
+ * Ver mockup 408-546.
+ *
+ * La sección Bitácora (`JournalSection`) se monta siempre (no solo cuando su paso/pestaña
+ * está activo) y se oculta con `display:none` vía su prop `hidden` — a diferencia de
+ * Datos/Riesgo/Estrategia (ligadas al único `form` de arriba, sin estado propio), en modo
+ * editar `JournalSection` mantiene su propio debounce de autoguardado; desmontarla al
+ * cambiar de pestaña perdería cualquier tecleo de los últimos <800ms que aún no se hubiera
+ * guardado.
  */
 export function TradeModal(props: TradeModalProps) {
   const router = useRouter()
@@ -129,14 +148,29 @@ export function TradeModal(props: TradeModalProps) {
   const detail = props.mode === 'edit' ? props.detail : undefined
   const isCreate = props.mode === 'create'
 
+  // Solo tiene sentido en modo editar: llega tras un `createTrade` exitoso cuyas capturas
+  // fallaron al subir (ver `handleFinalSubmit`), que redirige aquí mismo con este query
+  // param en vez de perder el aviso en un modal que ya se cerró. Se computa antes de `tab`
+  // (abajo) para que ese modal abra directamente en la pestaña Bitácora — si no, el aviso
+  // quedaría oculto tras `JournalSection.hidden` hasta que el usuario cambiara de pestaña.
+  const captureWarning = detail !== undefined && searchParams.get('captureWarning') === '1'
+
   const [form, setForm] = useState<FormState>(() =>
     props.mode === 'create' ? { ...EMPTY_FORM, tradeDate: props.defaultDate } : tradeToForm(props.detail),
   )
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [step, setStep] = useState(0)
-  const [tab, setTab] = useState(0)
+  const [tab, setTab] = useState(() => (captureWarning ? 1 : 0))
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Estado de la Bitácora en modo crear únicamente — en modo editar `JournalSection` es
+  // autocontenido (autoguarda por su cuenta, ver su doc). `journalRef` deja que
+  // `handleFinalSubmit`/`close` fuercen el flush de un debounce pendiente en modo editar.
+  const [journal, setJournal] = useState<JournalFormState>(EMPTY_JOURNAL)
+  const [pendingCaptures, setPendingCaptures] = useState<Partial<Record<CapturePhase, File>>>({})
+  const [uploadingCaptures, setUploadingCaptures] = useState(false)
+  const journalRef = useRef<JournalSectionHandle>(null)
 
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -193,10 +227,16 @@ export function TradeModal(props: TradeModalProps) {
   }, [])
 
   function close() {
+    // Fire-and-forget: si quedaba un debounce de autoguardado de la Bitácora sin disparar
+    // (usuario cierra <800ms después de su último tecleo), lo cancela y guarda ya mismo —
+    // no bloquea el cierre del modal por esto (no-op en modo crear, ver `JournalSection`).
+    void journalRef.current?.flush()
+
     const params = new URLSearchParams(searchParams.toString())
     params.delete('trade')
     params.delete('nuevo')
     params.delete('fecha')
+    params.delete('captureWarning')
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname)
   }
@@ -251,24 +291,80 @@ export function TradeModal(props: TradeModalProps) {
     setStep((s) => Math.min(WIZARD_STEPS.length - 1, s + 1))
   }
 
+  function applyResultError(result: { ok: false; error: string; fieldErrors?: Record<string, string[]> }) {
+    const errs = result.fieldErrors
+    if (errs && Object.keys(errs).length > 0) {
+      setFieldErrors(errs)
+      if (isCreate) {
+        setStep(Math.min(...Object.keys(errs).map(stepForField)))
+      } else {
+        setTab(0)
+      }
+    } else {
+      setFormError(result.error)
+    }
+  }
+
   function handleFinalSubmit() {
     setFormError(null)
     startTransition(async () => {
-      const result = detail ? await updateTrade(detail.id, form) : await createTrade(form)
-      if (!result.ok) {
-        const errs = result.fieldErrors
-        if (errs && Object.keys(errs).length > 0) {
-          setFieldErrors(errs)
-          if (isCreate) {
-            setStep(Math.min(...Object.keys(errs).map(stepForField)))
-          } else {
-            setTab(0)
-          }
-        } else {
-          setFormError(result.error)
+      if (detail) {
+        // El botón del footer solo guarda los campos del trade — la Bitácora autoguarda
+        // sola con debounce (`JournalSection`); `flush()` cancela un debounce pendiente
+        // (si lo hay, si no es no-op) y guarda ya mismo para que "Guardar cambios" también
+        // cubra un tecleo de los últimos <800ms.
+        const [result] = await Promise.all([updateTrade(detail.id, form), journalRef.current?.flush() ?? Promise.resolve()])
+        if (!result.ok) {
+          applyResultError(result)
+          return
         }
+        close()
+        router.refresh()
         return
       }
+
+      // Modo crear: la Bitácora (texto/emociones) se envía junto con el trade;
+      // las capturas todavía no tienen a qué `tradeId` pertenecer, así que se suben
+      // recién después, con el id que devuelve `createTrade`.
+      const result = await createTrade(form, journal)
+      if (!result.ok) {
+        applyResultError(result)
+        return
+      }
+
+      const newId = result.data.id
+      const filesToUpload = Object.entries(pendingCaptures).filter(
+        (entry): entry is [CapturePhase, File] => Boolean(entry[1]),
+      )
+
+      if (filesToUpload.length > 0) {
+        setUploadingCaptures(true)
+        let anyFailed = false
+        // Secuencial (no Promise.all): el brief pide subirlas una a una tras crear el trade.
+        for (const [phase, file] of filesToUpload) {
+          const formData = new FormData()
+          formData.append('file', file)
+          const uploadResult = await uploadCapture(newId, phase, formData)
+          if (!uploadResult.ok) anyFailed = true
+        }
+        setUploadingCaptures(false)
+
+        if (anyFailed) {
+          // Una captura fallida NO deshace el trade ya creado: en vez de cerrar con el
+          // error perdido, se abre el modo editar del trade recién creado (mismo Gate,
+          // otra navegación) con un aviso visible en la sección de capturas — ahí el
+          // usuario puede reintentar la subida.
+          const params = new URLSearchParams(searchParams.toString())
+          params.delete('nuevo')
+          params.delete('fecha')
+          params.set('trade', newId)
+          params.set('captureWarning', '1')
+          router.replace(`${pathname}?${params.toString()}`)
+          router.refresh()
+          return
+        }
+      }
+
       close()
       router.refresh()
     })
@@ -461,14 +557,17 @@ export function TradeModal(props: TradeModalProps) {
               </section>
             )}
 
-            {showBitacora && (
-              <section className="flex flex-col gap-[8px]">
-                <SectionTitle>Bitácora de la operación</SectionTitle>
-                <p className="m-0 text-[12px] text-neutral-500">
-                  (Se completa en la siguiente fase de construcción)
-                </p>
-              </section>
-            )}
+            <JournalSection
+              ref={journalRef}
+              hidden={!showBitacora}
+              tradeId={detail?.id}
+              initial={detail ? detail.journal : journal}
+              captures={detail?.captures ?? []}
+              onChange={isCreate ? setJournal : undefined}
+              pendingCaptures={isCreate ? pendingCaptures : undefined}
+              onPendingCapturesChange={isCreate ? setPendingCaptures : undefined}
+              notice={captureWarning ? CAPTURE_WARNING_MSG : null}
+            />
 
             {formError && (
               <p role="alert" className="text-neg m-0" style={{ fontSize: '12px' }}>
@@ -507,7 +606,13 @@ export function TradeModal(props: TradeModalProps) {
                   className="btn btn-primary text-[12px]"
                   disabled={isPending}
                 >
-                  {isPending ? 'Guardando…' : isCreate ? 'Guardar operación' : 'Guardar cambios'}
+                  {isPending
+                    ? uploadingCaptures
+                      ? 'Subiendo capturas…'
+                      : 'Guardando…'
+                    : isCreate
+                      ? 'Guardar operación'
+                      : 'Guardar cambios'}
                 </button>
               )}
             </div>
