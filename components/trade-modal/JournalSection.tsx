@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, useTransition } from 'react'
+import { forwardRef, useId, useImperativeHandle, useRef, useState, useTransition } from 'react'
 import { saveJournal } from '@/lib/actions/trades'
 import { uploadCapture, deleteCapture } from '@/lib/actions/captures'
 import type { JournalFormValues } from '@/lib/validation/trade'
@@ -52,14 +52,21 @@ type SaveStatus = 'idle' | 'pending' | 'saved' | 'error'
 /** Captura tal como la necesita `CaptureSlot`: id + `v` de cache-busting (ver doc de `CaptureSlotProps.existing`). */
 type CaptureSlotValue = { id: string; v: number }
 
+type FlushResult = { ok: boolean; error?: string }
+
 export interface JournalSectionHandle {
   /**
-   * Cancela el debounce pendiente (si lo hay) y guarda de inmediato. No-op en modo
-   * crear (nunca autoguarda) o si no hay un guardado pendiente en curso. Lo llama
-   * `TradeModal` antes de cerrar o al confirmar "Guardar cambios" para que un cambio
-   * tecleado en los últimos <800ms no se pierda.
+   * Guarda de inmediato si hay cambios sin confirmar (`dirty`): cancela el debounce
+   * pendiente si lo hay y guarda mientras `dirty` sea `true` — **incluso si el último
+   * intento automático falló**. Una versión anterior solo actuaba si había un `setTimeout`
+   * todavía armado (`debounceRef.current !== null`); tras un fallo ese timer ya se había
+   * disparado y limpiado a sí mismo, así que `flush()` se volvía un no-op permanente y el
+   * texto sin guardar no tenía ninguna vía de recuperación (hallazgo Crítico del review).
+   * No-op (`{ok:true}`) en modo crear o si no hay nada pendiente de guardar. `TradeModal`
+   * usa el resultado para decidir si puede cerrar el modal — un fallo aquí debe abortar el
+   * cierre (Guardar cambios / Cancelar / Escape / backdrop), no perder el texto en silencio.
    */
-  flush: () => Promise<void>
+  flush: () => Promise<FlushResult>
 }
 
 export interface JournalSectionProps {
@@ -92,7 +99,7 @@ export interface JournalSectionProps {
  * capturas se suben/borran de inmediato al soltar/eliminar (`uploadCapture`/
  * `deleteCapture`), sin esperar al debounce ni al botón "Guardar cambios" del footer —
  * todo autocontenido, `TradeModal` no necesita orquestar nada más que montar este
- * componente y (opcionalmente) llamar a `flush()` vía ref antes de cerrar/guardar.
+ * componente y llamar a `flush()` vía ref antes de cerrar/guardar (ver `JournalSectionHandle`).
  */
 export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionProps>(function JournalSection(
   { tradeId, initial, captures, onChange, pendingCaptures, onPendingCapturesChange, notice, hidden }: JournalSectionProps,
@@ -111,36 +118,72 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
   })
   const [captureBusy, setCaptureBusy] = useState<Partial<Record<CapturePhase, boolean>>>({})
   const [captureErrors, setCaptureErrors] = useState<Partial<Record<CapturePhase, string>>>({})
+  // Archivo recién soltado/seleccionado en modo editar, mientras su subida está en curso —
+  // ver el hallazgo Importante #3 del review: antes de esto, `pendingFile` era estructuralmente
+  // inalcanzable en modo editar (`TradeModal` siempre pasaba `undefined`), así que durante una
+  // subida la zona seguía mostrando "Arrastra la captura del gráfico" sin ningún feedback.
+  // Se limpia en el `finally` de `handleCaptureSelect` (éxito → cambia a `/api/captures` con
+  // el `v` nuevo; fallo → revierte a lo que había antes, con el error visible).
+  const [uploadingFile, setUploadingFile] = useState<Partial<Record<CapturePhase, File>>>({})
 
   const [, startTransition] = useTransition()
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Siempre el `state` más reciente — se actualiza de forma síncrona dentro de `updateJournal`
+  // (un event handler, no el cuerpo del render), así que a diferencia de una versión anterior
+  // no necesita un efecto aparte para mantenerse al día.
   const latestRef = useRef(state)
-  // Los refs no deben escribirse durante el render — se actualiza en un efecto (corre
-  // después de cada render, sin lista de dependencias) para que `flush()` siempre lea el
-  // último `state`, igual que el patrón de `closeRef` en `TradeModal.tsx`.
-  useEffect(() => {
-    latestRef.current = state
-  })
+  // `true` mientras `state` tenga cambios que el servidor todavía no confirmó guardados.
+  // Se pone en `true` en cada edición y solo se limpia cuando una respuesta EXITOSA de
+  // `saveJournal` corresponde exactamente al contenido más reciente (ver `flushSave`).
+  const dirtyRef = useRef(false)
+  // Contador monótono de intentos de guardado realmente disparados (debounce que dispara o
+  // `flush()` explícito) — permite ignorar la resolución de un intento viejo si uno más nuevo
+  // ya empezó, para que una respuesta lenta no pise el estado "Guardando…"/"Guardado ✓"/error
+  // de un intento posterior más reciente (hallazgo Importante #2 del review: carrera lenta-A/
+  // rápida-AB).
+  const attemptSeqRef = useRef(0)
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [])
-
-  async function flushSave(next: JournalFormState) {
+  async function flushSave(next: JournalFormState): Promise<FlushResult> {
+    const mySeq = ++attemptSeqRef.current
     setStatus('pending')
-    // `tradeId` está garantizado por los dos únicos call-sites (scheduleSave, solo
-    // alcanzable si `isEdit`; y `flush()` del ref, que chequea `isEdit` primero).
-    const result = await saveJournal(tradeId as string, next)
-    if (!result.ok) {
-      setStatus('error')
-      setSaveError(result.error)
-      return
+    try {
+      const result = await saveJournal(tradeId as string, next)
+      // Solo la respuesta del intento MÁS RECIENTE puede actualizar lo que se ve en pantalla
+      // — si ya empezó un intento más nuevo (`attemptSeqRef.current !== mySeq`), esta
+      // respuesta llegó tarde y se ignora para el status visible (pero su éxito/fallo real
+      // SÍ se devuelve al llamador, p. ej. un `flush()` explícito que sí quiere saber si
+      // ESTE guardado en particular funcionó).
+      const isLatestAttempt = attemptSeqRef.current === mySeq
+      // Solo se puede marcar "sin cambios pendientes" si nadie escribió nada nuevo desde que
+      // se tomó esta foto de `state` (comparación por referencia: `updateJournal` siempre crea
+      // un objeto nuevo, así que `next === latestRef.current` es `false` en cuanto hay una
+      // edición posterior, aunque ESTE guardado en particular haya tenido éxito).
+      const isStillCurrentContent = next === latestRef.current
+
+      if (result.ok) {
+        if (isStillCurrentContent) dirtyRef.current = false
+        if (isLatestAttempt) {
+          setSaveError(null)
+          setStatus('saved')
+        }
+        return { ok: true }
+      }
+
+      if (isLatestAttempt) {
+        setStatus('error')
+        setSaveError(result.error)
+      }
+      return { ok: false, error: result.error }
+    } catch {
+      // Fallo de red/transporte (no un `{ok:false}` normal del Server Action) — se trata
+      // igual que un fallo del servidor: no debe dejar `dirty`/status en un estado ambiguo.
+      if (attemptSeqRef.current === mySeq) {
+        setStatus('error')
+        setSaveError(ERROR_GENERICO)
+      }
+      return { ok: false, error: ERROR_GENERICO }
     }
-    setSaveError(null)
-    setStatus('saved')
   }
 
   function scheduleSave(next: JournalFormState) {
@@ -154,14 +197,24 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
 
   useImperativeHandle(ref, () => ({
     async flush() {
-      if (!isEdit || debounceRef.current === null) return
-      clearTimeout(debounceRef.current)
-      debounceRef.current = null
-      await flushSave(latestRef.current)
+      if (!isEdit) return { ok: true }
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
+      // Antes: `if (debounceRef.current === null) return` — un autoguardado que ya había
+      // FALLADO deja `debounceRef.current` en `null` (el timer ya disparó y se limpió solo),
+      // así que ese guard convertía `flush()` en un no-op permanente justo cuando más se
+      // necesitaba reintentar. Ahora se reintenta mientras haya contenido sin confirmar,
+      // sin importar si hay un timer armado o no.
+      if (!dirtyRef.current) return { ok: true }
+      return flushSave(latestRef.current)
     },
   }))
 
   function updateJournal(next: JournalFormState) {
+    latestRef.current = next
+    dirtyRef.current = true
     setState(next)
     if (isEdit) {
       scheduleSave(next)
@@ -186,18 +239,31 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
 
     setCaptureErrors((prev) => ({ ...prev, [phase]: undefined }))
     setCaptureBusy((prev) => ({ ...prev, [phase]: true }))
+    setUploadingFile((prev) => ({ ...prev, [phase]: file }))
     startTransition(async () => {
-      const formData = new FormData()
-      formData.append('file', file)
-      const result = await uploadCapture(tradeId as string, phase, formData)
-      setCaptureBusy((prev) => ({ ...prev, [phase]: false }))
-      if (!result.ok) {
-        setCaptureErrors((prev) => ({ ...prev, [phase]: result.error }))
-        return
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const result = await uploadCapture(tradeId as string, phase, formData)
+        if (!result.ok) {
+          setCaptureErrors((prev) => ({ ...prev, [phase]: result.error }))
+          return
+        }
+        // `v` se recalcula en cada subida exitosa (no solo al montar) — ver el doc de
+        // `CaptureSlotProps.existing` sobre por qué esto es necesario para el cache-busting.
+        setCaptureState((prev) => ({ ...prev, [phase]: { id: result.data.captureId, v: Date.now() } }))
+      } catch {
+        // Fallo de red/transporte: mismo tratamiento que un `{ok:false}` — sin esto, un throw
+        // aquí dejaría `captureBusy`/`uploadingFile` pegados en "subiendo" para siempre.
+        setCaptureErrors((prev) => ({ ...prev, [phase]: ERROR_GENERICO }))
+      } finally {
+        setCaptureBusy((prev) => ({ ...prev, [phase]: false }))
+        setUploadingFile((prev) => {
+          const next = { ...prev }
+          delete next[phase]
+          return next
+        })
       }
-      // `v` se recalcula en cada subida exitosa (no solo al montar) — ver el doc de
-      // `CaptureSlotProps.existing` sobre por qué esto es necesario para el cache-busting.
-      setCaptureState((prev) => ({ ...prev, [phase]: { id: result.data.captureId, v: Date.now() } }))
     })
   }
 
@@ -214,17 +280,22 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
     setCaptureErrors((prev) => ({ ...prev, [phase]: undefined }))
     setCaptureBusy((prev) => ({ ...prev, [phase]: true }))
     startTransition(async () => {
-      const result = await deleteCapture(existing.id)
-      setCaptureBusy((prev) => ({ ...prev, [phase]: false }))
-      if (!result.ok) {
-        setCaptureErrors((prev) => ({ ...prev, [phase]: result.error }))
-        return
+      try {
+        const result = await deleteCapture(existing.id)
+        if (!result.ok) {
+          setCaptureErrors((prev) => ({ ...prev, [phase]: result.error }))
+          return
+        }
+        setCaptureState((prev) => {
+          const next = { ...prev }
+          delete next[phase]
+          return next
+        })
+      } catch {
+        setCaptureErrors((prev) => ({ ...prev, [phase]: ERROR_GENERICO }))
+      } finally {
+        setCaptureBusy((prev) => ({ ...prev, [phase]: false }))
       }
-      setCaptureState((prev) => {
-        const next = { ...prev }
-        delete next[phase]
-        return next
-      })
     })
   }
 
@@ -265,7 +336,10 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
             phase={c.phase}
             label={c.label}
             existing={captureState[c.phase]}
-            pendingFile={pendingCaptures?.[c.phase]}
+            // Modo editar: el preview optimista es el archivo recién soltado mientras sube
+            // (`uploadingFile`), no `pendingCaptures` (eso es exclusivo de modo crear — ver
+            // el doc de `uploadingFile` arriba, hallazgo Importante #3 del review).
+            pendingFile={isEdit ? uploadingFile[c.phase] : pendingCaptures?.[c.phase]}
             busy={captureBusy[c.phase]}
             error={captureErrors[c.phase]}
             onSelect={(file) => handleCaptureSelect(c.phase, file)}

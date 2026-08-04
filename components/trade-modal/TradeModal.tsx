@@ -26,6 +26,8 @@ import {
 } from './JournalSection'
 
 const CAPTURE_WARNING_MSG = 'La operación se guardó, pero una captura falló. Puedes reintentarla al editar.'
+const ERROR_INESPERADO = 'Ocurrió un error inesperado. Intenta de nuevo.'
+const ERROR_GUARDANDO_BITACORA = 'No se pudo guardar la bitácora. Intenta de nuevo antes de cerrar.'
 
 const MONTH_NAMES_LOWER = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -166,7 +168,8 @@ export function TradeModal(props: TradeModalProps) {
 
   // Estado de la Bitácora en modo crear únicamente — en modo editar `JournalSection` es
   // autocontenido (autoguarda por su cuenta, ver su doc). `journalRef` deja que
-  // `handleFinalSubmit`/`close` fuercen el flush de un debounce pendiente en modo editar.
+  // `handleFinalSubmit`/`requestClose` fuercen (y esperen) el flush de un guardado
+  // pendiente/fallido en modo editar, abortando el cierre si ese flush falla.
   const [journal, setJournal] = useState<JournalFormState>(EMPTY_JOURNAL)
   const [pendingCaptures, setPendingCaptures] = useState<Partial<Record<CapturePhase, File>>>({})
   const [uploadingCaptures, setUploadingCaptures] = useState(false)
@@ -226,12 +229,11 @@ export function TradeModal(props: TradeModalProps) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  /** Cierre incondicional (navega ya mismo) — solo debe llamarse una vez que cualquier
+   * guardado pendiente (trade y/o Bitácora) ya se resolvió con éxito. Ver `requestClose`
+   * para las vías de cierre iniciadas por el usuario (Cancelar/Escape/backdrop), que sí
+   * deben esperar y poder abortar. */
   function close() {
-    // Fire-and-forget: si quedaba un debounce de autoguardado de la Bitácora sin disparar
-    // (usuario cierra <800ms después de su último tecleo), lo cancela y guarda ya mismo —
-    // no bloquea el cierre del modal por esto (no-op en modo crear, ver `JournalSection`).
-    void journalRef.current?.flush()
-
     const params = new URLSearchParams(searchParams.toString())
     params.delete('trade')
     params.delete('nuevo')
@@ -240,11 +242,30 @@ export function TradeModal(props: TradeModalProps) {
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname)
   }
+
+  /**
+   * Cierre iniciado por el usuario (Cancelar, Escape, click en el backdrop): antes de
+   * cerrar de verdad, le da a la Bitácora la oportunidad de guardar cualquier cambio sin
+   * confirmar (`flush()` — no-op si no hay nada pendiente, ver `JournalSectionHandle`). Si
+   * ese guardado falla, el cierre se ABORTA y el error queda visible (`formError`, siempre
+   * renderizado sin importar la pestaña/paso activo) en vez de perder el texto en silencio
+   * (hallazgo Crítico del review: antes, `close()` disparaba el flush en fire-and-forget y
+   * navegaba de inmediato sin esperar su resultado).
+   */
+  async function requestClose() {
+    const result = await journalRef.current?.flush()
+    if (result && !result.ok) {
+      setFormError(result.error ?? ERROR_GUARDANDO_BITACORA)
+      if (!isCreate) setTab(1)
+      return
+    }
+    close()
+  }
   // Refs no deben escribirse durante el render — se actualiza en un efecto (corre después
   // de cada render) para que el listener de Escape del efecto de arriba siempre invoque la
-  // versión más reciente de `close` sin tener que reengancharlo en cada render.
+  // versión más reciente de `requestClose` sin tener que reengancharlo en cada render.
   useEffect(() => {
-    closeRef.current = close
+    closeRef.current = requestClose
   })
 
   function updateField(name: TradeFieldName, value: string) {
@@ -311,11 +332,36 @@ export function TradeModal(props: TradeModalProps) {
       if (detail) {
         // El botón del footer solo guarda los campos del trade — la Bitácora autoguarda
         // sola con debounce (`JournalSection`); `flush()` cancela un debounce pendiente
-        // (si lo hay, si no es no-op) y guarda ya mismo para que "Guardar cambios" también
-        // cubra un tecleo de los últimos <800ms.
-        const [result] = await Promise.all([updateTrade(detail.id, form), journalRef.current?.flush() ?? Promise.resolve()])
-        if (!result.ok) {
-          applyResultError(result)
+        // (si lo hay) y guarda ya mismo (incluso si el intento automático anterior había
+        // fallado, ver `JournalSectionHandle.flush`) para que "Guardar cambios" también
+        // cubra un tecleo de los últimos <800ms — o un fallo previo sin reintentar.
+        // Anotado explícitamente para que el `?? Promise.resolve(...)` de abajo (caso
+        // `journalRef.current` nulo, en la práctica inalcanzable ya que la sección se monta
+        // siempre) tenga el mismo tipo que `flush()` — si no, `journalResult.error` no
+        // tipa contra la rama sin `error` del `??`.
+        const journalFlush: Promise<{ ok: boolean; error?: string }> =
+          journalRef.current?.flush() ?? Promise.resolve({ ok: true })
+
+        let updateResult: Awaited<ReturnType<typeof updateTrade>>
+        let journalResult: Awaited<typeof journalFlush>
+        try {
+          ;[updateResult, journalResult] = await Promise.all([updateTrade(detail.id, form), journalFlush])
+        } catch {
+          setFormError(ERROR_INESPERADO)
+          return
+        }
+
+        if (!updateResult.ok) {
+          applyResultError(updateResult)
+          return
+        }
+        if (!journalResult.ok) {
+          // El trade sí se guardó, pero la Bitácora no — NO se cierra el modal con texto
+          // sin confirmar todavía en pantalla (hallazgo Crítico del review): se muestra el
+          // error y se salta a la pestaña Bitácora para que el indicador de estado también
+          // sea visible, y el usuario puede reintentar con el mismo botón.
+          setFormError(journalResult.error ?? ERROR_GUARDANDO_BITACORA)
+          setTab(1)
           return
         }
         close()
@@ -340,14 +386,25 @@ export function TradeModal(props: TradeModalProps) {
       if (filesToUpload.length > 0) {
         setUploadingCaptures(true)
         let anyFailed = false
-        // Secuencial (no Promise.all): el brief pide subirlas una a una tras crear el trade.
-        for (const [phase, file] of filesToUpload) {
-          const formData = new FormData()
-          formData.append('file', file)
-          const uploadResult = await uploadCapture(newId, phase, formData)
-          if (!uploadResult.ok) anyFailed = true
+        try {
+          // Secuencial (no Promise.all): el brief pide subirlas una a una tras crear el trade.
+          for (const [phase, file] of filesToUpload) {
+            const formData = new FormData()
+            formData.append('file', file)
+            try {
+              const uploadResult = await uploadCapture(newId, phase, formData)
+              if (!uploadResult.ok) anyFailed = true
+            } catch {
+              // Fallo de red/transporte en ESTA captura puntual: no debe abortar el resto
+              // del `for` (las demás fases igual merecen su intento) ni dejar
+              // `uploadingCaptures` pegado en `true` (por eso el `finally` de abajo, no
+              // este catch interno, es quien lo apaga).
+              anyFailed = true
+            }
+          }
+        } finally {
+          setUploadingCaptures(false)
         }
-        setUploadingCaptures(false)
 
         if (anyFailed) {
           // Una captura fallida NO deshace el trade ya creado: en vez de cerrar con el
@@ -437,7 +494,7 @@ export function TradeModal(props: TradeModalProps) {
         }
       `}</style>
 
-      <div className="trademodal-backdrop" onClick={close}>
+      <div className="trademodal-backdrop" onClick={() => void requestClose()}>
         <div
           className="trademodal-dialog"
           role="dialog"
@@ -458,7 +515,7 @@ export function TradeModal(props: TradeModalProps) {
             </div>
             <button
               type="button"
-              onClick={close}
+              onClick={() => void requestClose()}
               aria-label="Cerrar"
               className="btn btn-ghost btn-icon ml-auto"
               style={{ width: '30px', height: '30px' }}
@@ -592,7 +649,7 @@ export function TradeModal(props: TradeModalProps) {
             )}
 
             <div className="ml-auto flex gap-[8px]">
-              <button type="button" onClick={close} className="btn btn-ghost text-[12px]">
+              <button type="button" onClick={() => void requestClose()} className="btn btn-ghost text-[12px]">
                 Cancelar
               </button>
               {isCreate && step < WIZARD_STEPS.length - 1 ? (
