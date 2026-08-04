@@ -55,6 +55,12 @@ export async function TradeModalGate({
     // `CapturePhase` de este módulo.
     const captures: ExistingCapture[] = detail.captures.map((c) => ({ id: c.id, phase: c.phase as CapturePhase }))
 
+    // Serializado a ISO string (no el `Date` de Drizzle) para mantener `EditableTrade`
+    // consistente con el resto de sus campos ("ya convertidas a un objeto plano y
+    // serializable", ver doc de la interfaz) — `JournalSection` lo compara contra un
+    // `savedAt` en milisegundos (`Date.now()`) al decidir si ofrecer restaurar un stash local.
+    const journalUpdatedAt = j ? j.updatedAt.toISOString() : null
+
     const plain: EditableTrade = {
       id: t.id,
       tradeDate: t.tradeDate,
@@ -79,6 +85,7 @@ export async function TradeModalGate({
       entryType: t.entryType,
       confirmations: t.confirmations,
       journal,
+      journalUpdatedAt,
       captures,
     }
 

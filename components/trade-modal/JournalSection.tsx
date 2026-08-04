@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useId, useImperativeHandle, useRef, useState, useTransition } from 'react'
+import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, useTransition } from 'react'
 import { saveJournal } from '@/lib/actions/trades'
 import { uploadCapture, deleteCapture } from '@/lib/actions/captures'
 import type { JournalFormValues } from '@/lib/validation/trade'
@@ -54,6 +54,14 @@ type CaptureSlotValue = { id: string; v: number }
 
 type FlushResult = { ok: boolean; error?: string }
 
+/** Forma persistida en `localStorage` por `stashAndDiscard` — ver doc ahí y en `TradeModal`. */
+type JournalStash = { savedAt: number; state: JournalFormState }
+
+/** Clave de `localStorage` del stash de recuperación de un trade concreto. */
+function stashKey(tradeId: string): string {
+  return `smartmoney.journal-stash.${tradeId}`
+}
+
 export interface JournalSectionHandle {
   /**
    * Guarda de inmediato si hay cambios sin confirmar (`dirty`): cancela el debounce
@@ -67,6 +75,16 @@ export interface JournalSectionHandle {
    * cierre (Guardar cambios / Cancelar / Escape / backdrop), no perder el texto en silencio.
    */
   flush: () => Promise<FlushResult>
+  /**
+   * Escapatoria deliberada al invariante de arriba: guarda el `state` actual (con o sin
+   * cambios pendientes) en `localStorage` como stash de recuperación y abandona cualquier
+   * debounce en curso, SIN esperar ni reintentar el guardado en el servidor. Pensada para
+   * el botón "Descartar cambios y cerrar" que `TradeModal` ofrece tras 2 fallos de flush
+   * consecutivos (`onFlushFailure`) — a partir de ahí, seguir bloqueando el cierre del modal
+   * (el comportamiento normal de `flush()`) deja al usuario atrapado si el fallo persiste.
+   * No-op en modo crear (no hay `tradeId` al que asociar el stash).
+   */
+  stashAndDiscard: () => void
 }
 
 export interface JournalSectionProps {
@@ -83,6 +101,16 @@ export interface JournalSectionProps {
   /** Oculta la sección con `display:none` en vez de desmontarla — necesario en modo editar
    * para que un debounce pendiente sobreviva un cambio de pestaña (ver `TradeModal`). */
   hidden?: boolean
+  /** Se invoca con el contador de fallos CONSECUTIVOS de flush cada vez que cambia (0 tras
+   * cualquier éxito) — `TradeModal` lo guarda en `flushFailures` para decidir cuándo ofrecer
+   * "Descartar cambios y cerrar". No se llama en modo crear (nunca autoguarda, ver `flush`). */
+  onFlushFailure?: (count: number) => void
+  /** `updatedAt` del journal ya guardado en el servidor (ISO string), serializado por
+   * `TradeModalGate` — se compara contra `savedAt` de un stash local (`stashAndDiscard`) al
+   * montar para decidir si ofrecer restaurarlo (ver el efecto más abajo). `undefined`/`null`
+   * en modo crear o si el journal del servidor no existiera (en la práctica siempre existe,
+   * ver `insertTradeWithJournal`). */
+  journalUpdatedAt?: string | null
 }
 
 /**
@@ -102,7 +130,18 @@ export interface JournalSectionProps {
  * componente y llamar a `flush()` vía ref antes de cerrar/guardar (ver `JournalSectionHandle`).
  */
 export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionProps>(function JournalSection(
-  { tradeId, initial, captures, onChange, pendingCaptures, onPendingCapturesChange, notice, hidden }: JournalSectionProps,
+  {
+    tradeId,
+    initial,
+    captures,
+    onChange,
+    pendingCaptures,
+    onPendingCapturesChange,
+    notice,
+    hidden,
+    onFlushFailure,
+    journalUpdatedAt,
+  }: JournalSectionProps,
   ref,
 ) {
   const isEdit = tradeId !== undefined
@@ -110,6 +149,10 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
   const [state, setState] = useState<JournalFormState>(initial)
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
+  // Stash de una sesión anterior detectado al montar (ver el efecto más abajo) — `null` si no
+  // hay ninguno o si el journal ya guardado en el servidor es más nuevo que él (stash obsoleto,
+  // ya limpiado en ese caso). Mientras no sea `null`, la barra "Restaurar/Descartar" es visible.
+  const [restoreStash, setRestoreStash] = useState<JournalStash | null>(null)
 
   const [captureState, setCaptureState] = useState<Partial<Record<CapturePhase, CaptureSlotValue>>>(() => {
     const map: Partial<Record<CapturePhase, CaptureSlotValue>> = {}
@@ -144,6 +187,11 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
   // rápida-AB).
   const attemptSeqRef = useRef(0)
 
+  // Fallos CONSECUTIVOS de flush (se resetea a 0 en cualquier éxito) — solo se toca en la
+  // rama `isLatestAttempt` de `flushSave`, igual que `status`/`saveError`, para que una
+  // respuesta vieja fuera de orden no lo desincronice. Ver `onFlushFailure`/`stashAndDiscard`.
+  const failCountRef = useRef(0)
+
   async function flushSave(next: JournalFormState): Promise<FlushResult> {
     const mySeq = ++attemptSeqRef.current
     setStatus('pending')
@@ -166,13 +214,28 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
         if (isLatestAttempt) {
           setSaveError(null)
           setStatus('saved')
+          failCountRef.current = 0
+          onFlushFailure?.(0)
         }
+        // Un guardado exitoso deja el stash local (si lo hubiera) obsoleto — se limpia aquí
+        // sin importar si este intento en particular era el más reciente: el servidor ya
+        // tiene contenido al menos tan nuevo como `next`, así que un stash previo (de un
+        // "Descartar cambios y cerrar" anterior) ya no aporta nada que restaurar. También se
+        // oculta la barra "Restaurar/Descartar" si estuviera visible (`restoreStash`, estado
+        // en memoria e independiente de la clave en `localStorage` que `clearStash` acaba de
+        // borrar): sin esto, un guardado exitoso de una edición cualquiera (sin que el
+        // usuario llegara a tocar esa barra) la dejaría mostrando un "Restaurar" que
+        // sobrescribiría este contenido recién confirmado con el stash viejo.
+        clearStash()
+        setRestoreStash(null)
         return { ok: true }
       }
 
       if (isLatestAttempt) {
         setStatus('error')
         setSaveError(result.error)
+        failCountRef.current += 1
+        onFlushFailure?.(failCountRef.current)
       }
       return { ok: false, error: result.error }
     } catch {
@@ -181,8 +244,21 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
       if (attemptSeqRef.current === mySeq) {
         setStatus('error')
         setSaveError(ERROR_GENERICO)
+        failCountRef.current += 1
+        onFlushFailure?.(failCountRef.current)
       }
       return { ok: false, error: ERROR_GENERICO }
+    }
+  }
+
+  /** Borra el stash de recuperación de este trade, si lo hay — ignora fallos de `localStorage`
+   * (modo privado, cuota, etc.): nunca debe interrumpir el flujo normal de guardado/cierre. */
+  function clearStash() {
+    if (!isEdit) return
+    try {
+      localStorage.removeItem(stashKey(tradeId as string))
+    } catch {
+      // ver doc de arriba
     }
   }
 
@@ -210,6 +286,21 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
       if (!dirtyRef.current) return { ok: true }
       return flushSave(latestRef.current)
     },
+    stashAndDiscard() {
+      if (!isEdit) return
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
+      try {
+        const stash: JournalStash = { savedAt: Date.now(), state: latestRef.current }
+        localStorage.setItem(stashKey(tradeId as string), JSON.stringify(stash))
+      } catch {
+        // localStorage inaccesible (modo privado, cuota, etc.) — no debe impedir el cierre,
+        // que es justamente lo que este botón existe para garantizar aunque el guardado
+        // normal esté fallando.
+      }
+    },
   }))
 
   function updateJournal(next: JournalFormState) {
@@ -221,6 +312,70 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
     } else {
       onChange?.(next)
     }
+  }
+
+  // Al montar (una vez por trade abierto — `TradeModalGate` fuerza un remount por `key` en
+  // cada `?trade=<id>` distinto, ver su doc), revisa si hay un stash de recuperación de una
+  // sesión anterior (`stashAndDiscard`) más nuevo que el journal que el servidor ya tiene
+  // (`journalUpdatedAt`, serializado por `TradeModalGate`). Si lo hay, ofrece restaurarlo
+  // (`restoreStash` -> barra "Restaurar/Descartar" en el JSX); si no, o si el servidor ya
+  // tiene algo más nuevo (p. ej. se guardó desde otra pestaña/sesión), el stash quedó
+  // obsoleto y se limpia sin molestar al usuario. `localStorage` solo se toca aquí dentro
+  // de un efecto — nunca durante el render (SSR-safe).
+  useEffect(() => {
+    if (!isEdit) return
+    const key = stashKey(tradeId as string)
+    let raw: string | null
+    try {
+      raw = localStorage.getItem(key)
+    } catch {
+      return
+    }
+    if (!raw) return
+
+    let parsed: JournalStash
+    try {
+      parsed = JSON.parse(raw) as JournalStash
+    } catch {
+      return
+    }
+    if (typeof parsed.savedAt !== 'number' || typeof parsed.state !== 'object' || parsed.state === null) return
+
+    const serverUpdatedAt = journalUpdatedAt ? new Date(journalUpdatedAt).getTime() : 0
+    if (parsed.savedAt > serverUpdatedAt) {
+      // Sincroniza `state` de React con un sistema externo (`localStorage`) leído una sola
+      // vez al montar — no hay forma SSR-safe de mover esto al inicializador de `useState`
+      // (ese código también correría en el render del servidor, donde `localStorage` no
+      // existe), así que un efecto de montaje es la vía correcta aquí, no un smell a evitar.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRestoreStash(parsed)
+    } else {
+      try {
+        localStorage.removeItem(key)
+      } catch {
+        // ver doc de `clearStash`
+      }
+    }
+    // Deliberadamente solo al montar: `tradeId`/`journalUpdatedAt` son estables durante toda
+    // la vida de esta instancia (el `key` de `TradeModalGate` fuerza un remount por trade).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** Botón "Restaurar" de la barra de recuperación: carga el stash en el estado (lo marca
+   * `dirty` y dispara el autoguardado normal, igual que cualquier otra edición) y limpia el
+   * stash ya consumido. */
+  function handleRestoreStash() {
+    if (!restoreStash) return
+    updateJournal(restoreStash.state)
+    setRestoreStash(null)
+    clearStash()
+  }
+
+  /** Botón "Descartar" de la barra de recuperación: descarta el stash sin tocar el `state`
+   * actual (el que ya se cargó desde el servidor al montar). */
+  function handleDismissStash() {
+    setRestoreStash(null)
+    clearStash()
   }
 
   function handleFieldChange(name: JournalFieldName, value: string) {
@@ -317,6 +472,24 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
           </span>
         )}
       </div>
+
+      {restoreStash && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-[10px] rounded-[9px] px-[12px] py-[9px]"
+          style={{ border: '1px solid var(--color-neutral-700)', background: 'var(--color-neutral-800)' }}
+        >
+          <span className="text-[11.5px] text-neutral-300">Tienes cambios sin guardar de una sesión anterior</span>
+          <div className="ml-auto flex gap-[8px]">
+            <button type="button" onClick={handleRestoreStash} className="btn btn-ghost text-[12px]">
+              Restaurar
+            </button>
+            <button type="button" onClick={handleDismissStash} className="btn btn-ghost text-[12px]">
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-[12px]" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
         {QUESTIONS.map((q) => (

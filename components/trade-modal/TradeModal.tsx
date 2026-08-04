@@ -55,6 +55,11 @@ export interface EditableTrade {
   entryType: string | null
   confirmations: string | null
   journal: JournalFormState
+  /** `updatedAt` del journal (ISO string) tal como lo guardó `TradeModalGate` — pasa a
+   * `JournalSection` para que compare contra un stash local (`stashAndDiscard`, ver el paso 3
+   * del brief de Task 5) y decida si ofrecer restaurarlo. `null` si el journal no existiera
+   * (en la práctica siempre existe, ver `insertTradeWithJournal`). */
+  journalUpdatedAt: string | null
   captures: ExistingCapture[]
 }
 
@@ -164,7 +169,15 @@ export function TradeModal(props: TradeModalProps) {
   const [uploadingCaptures, setUploadingCaptures] = useState(false)
   const journalRef = useRef<JournalSectionHandle>(null)
 
+  // Fallos CONSECUTIVOS de flush del autoguardado de la Bitácora, reportados por
+  // `JournalSection` vía `onFlushFailure` (0 tras cualquier éxito). A partir de 2, se ofrece
+  // "Descartar cambios y cerrar" (ver `handleDiscardAndClose`) junto al `formError` — la
+  // única vía deliberada de cerrar con texto sin guardar (excepción documentada al invariante
+  // de close-abort de Task 14, ver doc de `requestClose`).
+  const [flushFailures, setFlushFailures] = useState(0)
+
   const contentRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   // true en cuanto el usuario escribe algo directamente en R múltiple; se resetea si lo
   // vuelve a dejar vacío. Mientras sea false, el autocálculo de `updateField` puede seguir
@@ -208,11 +221,55 @@ export function TradeModal(props: TradeModalProps) {
     contentRef.current?.querySelector<HTMLElement>('input, select, textarea')?.focus()
   }, [])
 
-  // Escape cierra el modal. `close` se lee vía ref para no reenganchar el listener en cada render.
+  // Escape cierra el modal. `close` se lee vía ref para no reenganchar el listener en cada
+  // render. El mismo listener también implementa el focus trap del diálogo: Tab/Shift+Tab en
+  // los bordes de la lista de focusables cicla al otro extremo en vez de escapar hacia la
+  // página de debajo (que sigue en el DOM detrás del backdrop). La lista de focusables se
+  // recalcula en cada Tab (no se cachea): es barata (un `querySelectorAll` acotado al
+  // diálogo) y así queda correcta sin importar qué paso/pestaña esté activo en ese momento
+  // — cambiar de paso monta/desmonta secciones enteras, así que una lista cacheada al montar
+  // quedaría obsoleta en cuanto el usuario avanzara el wizard o cambiara de pestaña.
   const closeRef = useRef<() => void>(() => {})
   useEffect(() => {
+    function getFocusables(dialog: HTMLElement): HTMLElement[] {
+      const candidates = dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      // `offsetParent === null` descarta lo oculto por `display:none` (p. ej. los pasos del
+      // wizard no activos, o `JournalSection` cuando su pestaña no está activa) — un
+      // elemento así no es alcanzable con Tab en un navegador real, así que tampoco debe
+      // contar para el ciclo. También descarta lo deshabilitado, que no puede recibir foco.
+      return Array.from(candidates).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null)
+    }
+
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') closeRef.current()
+      if (e.key === 'Escape') {
+        closeRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusables = getFocusables(dialog)
+      if (focusables.length === 0) return
+
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+      const activeIndex = active instanceof HTMLElement ? focusables.indexOf(active) : -1
+
+      if (e.shiftKey) {
+        // En el primero (o con el foco fuera del diálogo, `activeIndex === -1`): envuelve al
+        // último en vez de dejar que Shift+Tab se escape hacia atrás de la página.
+        if (activeIndex <= 0) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else if (activeIndex === -1 || activeIndex === focusables.length - 1) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
@@ -256,6 +313,20 @@ export function TradeModal(props: TradeModalProps) {
   useEffect(() => {
     closeRef.current = requestClose
   })
+
+  /**
+   * Escapatoria deliberada al invariante de `requestClose` de arriba: solo se ofrece
+   * (ver el botón en el JSX, condicionado a `flushFailures >= 2`) cuando el autoguardado de
+   * la Bitácora lleva 2+ fallos consecutivos — en ese punto, seguir bloqueando el cierre
+   * atraparía al usuario con un modal que no puede cerrar mientras el guardado no se
+   * recupere. En vez de reintentar, `stashAndDiscard()` deja el texto sin guardar en
+   * `localStorage` (recuperable al reabrir este trade, ver `JournalSection`) y cierra sin
+   * condiciones — la ÚNICA vía que puede cerrar con texto sin confirmar en pantalla.
+   */
+  function handleDiscardAndClose() {
+    journalRef.current?.stashAndDiscard()
+    close()
+  }
 
   function updateField(name: TradeFieldName, value: string) {
     setFieldErrors((prev) => {
@@ -454,10 +525,91 @@ export function TradeModal(props: TradeModalProps) {
   const showEstrategia = isCreate ? step === 2 : tab === 0
   const showBitacora = isCreate ? step === 3 : tab === 1
 
-  const title = !detail ? 'Registrar operación' : form.setup ? `${form.asset} · ${form.setup}` : form.asset
+  // Fallback si el título computado quedara vacío (p. ej. editando un trade cuyo `asset` el
+  // usuario acaba de borrar del todo, antes de volver a escribir algo) — sin esto,
+  // `aria-labelledby="trademodal-title"` apuntaría a un nodo sin texto y el diálogo quedaría
+  // sin nombre accesible para un lector de pantalla.
+  const computedTitle = !detail ? 'Registrar operación' : form.setup ? `${form.asset} · ${form.setup}` : form.asset
+  const title = computedTitle || 'Registrar operación'
   const dateLine = !detail
     ? `Nuevo registro · ${formatLongDate(form.tradeDate)}`
     : `${formatLongDate(form.tradeDate)} · ${marketLabel(form.market)}${form.timeframe ? ` · ${form.timeframe}` : ''}`
+
+  // Extraído para no duplicar estas 3 secciones: en modo editar viven dentro de un único
+  // `role="tabpanel"` (las 3 comparten la misma condición `tab === 0`, ver `showDatos`/
+  // `showRiesgo`/`showEstrategia` arriba); en modo crear, cada una es un paso independiente
+  // del wizard y no necesita ese wrapper (ver más abajo, en el JSX).
+  const datosRiesgoEstrategiaSections = (
+    <>
+      {showDatos && (
+        <section className="flex flex-col gap-[12px]">
+          <SectionTitle>Información básica</SectionTitle>
+          <FieldGrid>
+            {DATOS_FIELDS.map((f) => (
+              <FormField
+                key={f.name}
+                field={f}
+                value={form[f.name]}
+                onChange={(v) => updateField(f.name, v)}
+                errors={fieldErrors[f.name]}
+              />
+            ))}
+            <DirectionToggle value={form.direction} onChange={(v) => updateField('direction', v)} />
+          </FieldGrid>
+        </section>
+      )}
+
+      {showRiesgo && (
+        <section className="flex flex-col gap-[12px]">
+          <SectionTitle>Gestión del riesgo y resultado</SectionTitle>
+          <FieldGrid>
+            {RIESGO_FIELDS.map((f) => (
+              <FormField
+                key={f.name}
+                field={f}
+                value={form[f.name]}
+                onChange={(v) => updateField(f.name, v)}
+                errors={fieldErrors[f.name]}
+              />
+            ))}
+          </FieldGrid>
+        </section>
+      )}
+
+      {showEstrategia && (
+        <section className="flex flex-col gap-[12px]">
+          <SectionTitle>Información estratégica</SectionTitle>
+          <FieldGrid>
+            {ESTRATEGIA_FIELDS.map((f) => (
+              <FormField
+                key={f.name}
+                field={f}
+                value={form[f.name]}
+                onChange={(v) => updateField(f.name, v)}
+                errors={fieldErrors[f.name]}
+              />
+            ))}
+          </FieldGrid>
+        </section>
+      )}
+    </>
+  )
+
+  const journalSectionEl = (
+    <JournalSection
+      ref={journalRef}
+      hidden={!showBitacora}
+      tradeId={detail?.id}
+      initial={detail ? detail.journal : journal}
+      captures={detail?.captures ?? []}
+      onChange={isCreate ? setJournal : undefined}
+      pendingCaptures={isCreate ? pendingCaptures : undefined}
+      onPendingCapturesChange={isCreate ? setPendingCaptures : undefined}
+      notice={captureWarning ? CAPTURE_WARNING_MSG : null}
+      onFlushFailure={setFlushFailures}
+      journalUpdatedAt={detail?.journalUpdatedAt ?? null}
+    />
+  )
 
   return (
     <>
@@ -485,6 +637,7 @@ export function TradeModal(props: TradeModalProps) {
 
       <div className="trademodal-backdrop" onClick={() => void requestClose()}>
         <div
+          ref={dialogRef}
           className="trademodal-dialog"
           role="dialog"
           aria-modal="true"
@@ -513,13 +666,17 @@ export function TradeModal(props: TradeModalProps) {
             </button>
           </div>
 
-          <div className="flex gap-1 px-[22px] pt-[12px]">
+          <div className="flex gap-1 px-[22px] pt-[12px]" role={isCreate ? undefined : 'tablist'}>
             {(isCreate ? WIZARD_STEPS : EDIT_TABS).map((label, i) => {
               const active = isCreate ? step === i : tab === i
               return (
                 <button
                   key={label}
                   type="button"
+                  role={isCreate ? undefined : 'tab'}
+                  aria-selected={isCreate ? undefined : active}
+                  aria-controls={isCreate ? undefined : `trademodal-panel-${i}`}
+                  id={isCreate ? undefined : `trademodal-tab-${i}`}
                   onClick={() => {
                     disarmDelete()
                     if (isCreate) setStep(i)
@@ -551,74 +708,46 @@ export function TradeModal(props: TradeModalProps) {
           </div>
 
           <div ref={contentRef} className="trademodal-content flex flex-col gap-[20px] px-[22px] py-[18px]">
-            {showDatos && (
-              <section className="flex flex-col gap-[12px]">
-                <SectionTitle>Información básica</SectionTitle>
-                <FieldGrid>
-                  {DATOS_FIELDS.map((f) => (
-                    <FormField
-                      key={f.name}
-                      field={f}
-                      value={form[f.name]}
-                      onChange={(v) => updateField(f.name, v)}
-                      errors={fieldErrors[f.name]}
-                    />
-                  ))}
-                  <DirectionToggle value={form.direction} onChange={(v) => updateField('direction', v)} />
-                </FieldGrid>
-              </section>
+            {isCreate ? (
+              datosRiesgoEstrategiaSections
+            ) : (
+              <div
+                role="tabpanel"
+                id="trademodal-panel-0"
+                aria-labelledby="trademodal-tab-0"
+                hidden={tab !== 0}
+                className="flex flex-col gap-[20px]"
+              >
+                {datosRiesgoEstrategiaSections}
+              </div>
             )}
 
-            {showRiesgo && (
-              <section className="flex flex-col gap-[12px]">
-                <SectionTitle>Gestión del riesgo y resultado</SectionTitle>
-                <FieldGrid>
-                  {RIESGO_FIELDS.map((f) => (
-                    <FormField
-                      key={f.name}
-                      field={f}
-                      value={form[f.name]}
-                      onChange={(v) => updateField(f.name, v)}
-                      errors={fieldErrors[f.name]}
-                    />
-                  ))}
-                </FieldGrid>
-              </section>
+            {isCreate ? (
+              journalSectionEl
+            ) : (
+              <div role="tabpanel" id="trademodal-panel-1" aria-labelledby="trademodal-tab-1" hidden={tab !== 1}>
+                {journalSectionEl}
+              </div>
             )}
 
-            {showEstrategia && (
-              <section className="flex flex-col gap-[12px]">
-                <SectionTitle>Información estratégica</SectionTitle>
-                <FieldGrid>
-                  {ESTRATEGIA_FIELDS.map((f) => (
-                    <FormField
-                      key={f.name}
-                      field={f}
-                      value={form[f.name]}
-                      onChange={(v) => updateField(f.name, v)}
-                      errors={fieldErrors[f.name]}
-                    />
-                  ))}
-                </FieldGrid>
-              </section>
-            )}
-
-            <JournalSection
-              ref={journalRef}
-              hidden={!showBitacora}
-              tradeId={detail?.id}
-              initial={detail ? detail.journal : journal}
-              captures={detail?.captures ?? []}
-              onChange={isCreate ? setJournal : undefined}
-              pendingCaptures={isCreate ? pendingCaptures : undefined}
-              onPendingCapturesChange={isCreate ? setPendingCaptures : undefined}
-              notice={captureWarning ? CAPTURE_WARNING_MSG : null}
-            />
-
-            {formError && (
-              <p role="alert" className="text-neg m-0" style={{ fontSize: '12px' }}>
-                {formError}
-              </p>
+            {(formError || flushFailures >= 2) && (
+              <div className="flex flex-wrap items-center gap-[10px]">
+                {formError && (
+                  <p role="alert" className="text-neg m-0" style={{ fontSize: '12px' }}>
+                    {formError}
+                  </p>
+                )}
+                {flushFailures >= 2 && (
+                  <button
+                    type="button"
+                    onClick={handleDiscardAndClose}
+                    className="btn btn-ghost text-[12px]"
+                    style={{ color: 'var(--neg)' }}
+                  >
+                    Descartar cambios y cerrar
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
