@@ -1,0 +1,903 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-ccd4873c-4beb-4301-8bce-74f2caa2995c/styles.css">
+<script src="_ds/nocturne-ccd4873c-4beb-4301-8bce-74f2caa2995c/_ds_bundle.js"></script>
+<style>
+:root{--pos:oklch(0.76 0.11 162);--neg:oklch(0.68 0.15 22)}
+html,body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:var(--color-accent-300);text-decoration:none}
+a:hover{color:var(--color-accent)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--color-neutral-800);border-radius:8px}
+@keyframes smRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes smDraw{from{stroke-dashoffset:1400}to{stroke-dashoffset:0}}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:var(--color-bg)">
+
+  <aside style="width:236px;flex:none;border-right:1px solid var(--color-neutral-800);padding:20px 14px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 8px">
+      <div style="width:26px;height:26px;border:1px solid var(--color-accent);border-radius:7px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px -4px var(--color-accent)">
+        <div style="width:8px;height:8px;background:var(--color-accent);border-radius:2px;transform:rotate(45deg)"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;line-height:1.15">
+        <span style="font-family:var(--font-heading);font-size:13.5px;font-weight:500;letter-spacing:-0.01em">Smart Money</span>
+        <span style="font-size:10px;color:var(--color-neutral-400);letter-spacing:.12em;text-transform:uppercase">App</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <span style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-500);padding:0 8px 8px">{{ roleLabel }}</span>
+      <sc-for list="{{ nav }}" as="item" hint-placeholder-count="6">
+        <button onClick="{{ item.go }}" style="{{ item.style }}" style-hover="background:var(--color-neutral-800);color:var(--color-text)">
+          <span style="width:16px;display:flex;justify-content:center;font-size:13px;opacity:.85">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+          <sc-if value="{{ item.badge }}" hint-placeholder-val="{{ true }}">
+            <span style="margin-left:auto;font-size:10px;min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:var(--color-accent-800);color:var(--color-accent-200);display:flex;align-items:center;justify-content:center">{{ item.badge }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-500);padding:0 8px">Vista del prototipo</div>
+      <div class="seg" style="display:flex;gap:4px;padding:3px;border:1px solid var(--color-neutral-800);border-radius:9px">
+        <button onClick="{{ setStudent }}" style="{{ segStudent }}">Estudiante</button>
+        <button onClick="{{ setMentor }}" style="{{ segMentor }}">Mentor</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:9px 8px;border-top:1px solid var(--color-neutral-800)">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--color-neutral-800);border:1px solid var(--color-neutral-700);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--color-neutral-300)">{{ userInitials }}</div>
+        <div style="display:flex;flex-direction:column;line-height:1.25;min-width:0">
+          <span style="font-size:12px">{{ userName }}</span>
+          <span style="font-size:10.5px;color:var(--color-neutral-500)">{{ userMeta }}</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="display:flex;align-items:center;gap:16px;padding:18px 30px;border-bottom:1px solid var(--color-neutral-800);position:sticky;top:0;background:linear-gradient(var(--color-bg),color-mix(in oklab,var(--color-bg) 92%,transparent));backdrop-filter:blur(8px);z-index:20">
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+        <h1 style="margin:0;font-family:var(--font-heading);font-size:19px;font-weight:500;letter-spacing:-0.015em">{{ screenTitle }}</h1>
+        <p style="margin:0;font-size:12px;color:var(--color-neutral-400)">{{ screenSub }}</p>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+        <sc-if value="{{ isMentor }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--color-neutral-800);border-radius:8px">
+            <span style="font-size:11px;color:var(--color-neutral-500)">Viendo a</span>
+            <select onChange="{{ pickStudent }}" value="{{ studentId }}" style="background:transparent;border:0;color:var(--color-text);font-family:var(--font-body);font-size:12px;outline:none">
+              <sc-for list="{{ students }}" as="s" hint-placeholder-count="4">
+                <option value="{{ s.id }}">{{ s.name }}</option>
+              </sc-for>
+            </select>
+          </div>
+        </sc-if>
+        <button class="btn btn-secondary" onClick="{{ openNew }}" style="font-size:12px;padding:8px 13px">+ Registrar trade</button>
+      </div>
+    </header>
+
+    <div style="padding:26px 30px 60px;display:flex;flex-direction:column;gap:22px;animation:smRise .3s ease both" key="{{ screen }}">
+
+      <!-- DASHBOARD -->
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+          <sc-for list="{{ heroStats }}" as="k" hint-placeholder-count="4">
+            <div class="card" style="padding:16px 17px;display:flex;flex-direction:column;gap:9px;border-radius:var(--radius-md)">
+              <span style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-500)">{{ k.label }}</span>
+              <span style="font-family:var(--font-heading);font-size:26px;font-weight:500;letter-spacing:-0.02em;line-height:1;color:{{ k.color }}">{{ k.value }}</span>
+              <span style="font-size:11.5px;color:var(--color-neutral-400)">{{ k.sub }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,2.1fr) minmax(0,1fr);gap:16px">
+          <div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:baseline;gap:12px">
+              <h2 style="margin:0;font-family:var(--font-heading);font-size:14px;font-weight:500">Curva de crecimiento</h2>
+              <span style="font-size:11.5px;color:var(--color-neutral-500)">Ãšltimos 30 dÃ­as de operativa</span>
+              <span style="margin-left:auto;font-size:12px;color:var(--pos)">{{ equityDelta }}</span>
+            </div>
+            <svg viewBox="0 0 720 220" preserveAspectRatio="none" style="width:100%;height:220px;display:block">
+              <defs>
+                <linearGradient id="smEq" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--color-accent)" stop-opacity="0.28"></stop>
+                  <stop offset="100%" stop-color="var(--color-accent)" stop-opacity="0"></stop>
+                </linearGradient>
+              </defs>
+              <sc-for list="{{ gridLines }}" as="g" hint-placeholder-count="4">
+                <line x1="0" x2="720" y1="{{ g.y }}" y2="{{ g.y }}" stroke="var(--color-neutral-800)" stroke-width="1"></line>
+              </sc-for>
+              <path d="{{ equityArea }}" fill="url(#smEq)"></path>
+              <path d="{{ equityPath }}" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" style="stroke-dasharray:1400;animation:smDraw 1.1s ease-out both"></path>
+            </svg>
+            <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--color-neutral-500)">
+              <sc-for list="{{ equityTicks }}" as="t" hint-placeholder-count="5"><span>{{ t }}</span></sc-for>
+            </div>
+          </div>
+
+          <div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+            <h2 style="margin:0;font-family:var(--font-heading);font-size:14px;font-weight:500">Calidad de la operativa</h2>
+            <div style="display:flex;align-items:center;gap:16px">
+              <svg viewBox="0 0 100 100" style="width:96px;height:96px;flex:none;transform:rotate(-90deg)">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="var(--color-neutral-800)" stroke-width="9"></circle>
+                <circle cx="50" cy="50" r="42" fill="none" stroke="var(--color-accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="{{ winDash }}"></circle>
+              </svg>
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font-family:var(--font-heading);font-size:28px;font-weight:500;line-height:1">{{ winRate }}%</span>
+                <span style="font-size:11.5px;color:var(--color-neutral-400)">Win Rate</span>
+                <span style="font-size:11.5px;color:var(--color-neutral-500);margin-top:6px">{{ winsLosses }}</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;border-top:1px solid var(--color-neutral-800);padding-top:14px">
+              <sc-for list="{{ qualityStats }}" as="q" hint-placeholder-count="4">
+                <div style="display:flex;align-items:baseline;gap:10px;font-size:12px">
+                  <span style="color:var(--color-neutral-400)">{{ q.label }}</span>
+                  <span style="margin-left:auto;font-variant-numeric:tabular-nums;color:{{ q.color }}">{{ q.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:16px">
+          <div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+            <h2 style="margin:0;font-family:var(--font-heading);font-size:14px;font-weight:500">Rendimiento mensual</h2>
+            <div style="display:flex;align-items:flex-end;gap:9px;height:130px">
+              <sc-for list="{{ monthlyBars }}" as="m" hint-placeholder-count="8">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end">
+                  <span style="font-size:10px;color:var(--color-neutral-500);font-variant-numeric:tabular-nums">{{ m.label }}</span>
+                  <div style="{{ m.barStyle }}"></div>
+                  <span style="font-size:10px;color:var(--color-neutral-500)">{{ m.month }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:baseline">
+              <h2 style="margin:0;font-family:var(--font-heading);font-size:14px;font-weight:500">Ãšltimas operaciones</h2>
+              <button onClick="{{ goCalendar }}" class="btn btn-ghost" style="margin-left:auto;font-size:11.5px;padding:5px 9px">Ver calendario</button>
+            </div>
+            <table class="table" style="width:100%;font-size:12px">
+              <thead>
+                <tr>
+                  <th style="text-align:left">Activo</th><th style="text-align:left">Dir.</th><th style="text-align:left">Setup</th><th style="text-align:right">R</th><th style="text-align:right">P&amp;L</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ recentTrades }}" as="t" hint-placeholder-count="5">
+                  <tr onClick="{{ t.open }}" style="cursor:pointer" style-hover="background:var(--color-neutral-800)">
+                    <td style="font-variant-numeric:tabular-nums">{{ t.asset }}</td>
+                    <td><span style="{{ t.dirStyle }}">{{ t.direction }}</span></td>
+                    <td style="color:var(--color-neutral-400)">{{ t.setup }}</td>
+                    <td style="text-align:right;font-variant-numeric:tabular-nums;color:{{ t.color }}">{{ t.r }}</td>
+                    <td style="text-align:right;font-variant-numeric:tabular-nums;color:{{ t.color }}">{{ t.pnl }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- CALENDARIO -->
+      <sc-if value="{{ isCalendar }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ isStudent }}" hint-placeholder-val="{{ true }}">
+          <div class="card" style="padding:15px 18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:12px;flex:none">
+              <div style="width:38px;height:38px;border:1px solid var(--color-accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-size:15px;box-shadow:0 0 18px -7px var(--color-accent)">3</div>
+              <div style="display:flex;flex-direction:column;line-height:1.3">
+                <span style="font-family:var(--font-heading);font-size:13.5px">Nivel 3 Â· Consistencia</span>
+                <span style="font-size:11.5px;color:var(--color-neutral-400)">Objetivo del nivel: generar $2,000</span>
+              </div>
+            </div>
+            <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;font-size:11.5px;color:var(--color-neutral-500)">
+                <span>$1,595 de $2,000</span>
+                <span style="margin-left:auto;color:var(--color-neutral-300)">64%</span>
+              </div>
+              <div style="height:7px;border-radius:5px;background:var(--color-neutral-800);overflow:hidden">
+                <div style="width:64%;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--color-accent-600),var(--color-accent));transition:width .5s ease"></div>
+              </div>
+              <span style="font-size:11px;color:var(--color-neutral-500)">Te faltan $405 y 17 operaciones para pasar al Nivel 4</span>
+            </div>
+            <button onClick="{{ goLevels }}" class="btn btn-ghost" style="font-size:11.5px;padding:6px 11px;flex:none">Ver mi nivel</button>
+          </div>
+        </sc-if>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onClick="{{ prevMonth }}" class="btn btn-ghost btn-icon" style="width:30px;height:30px;padding:0">â€¹</button>
+            <span style="font-family:var(--font-heading);font-size:15px;min-width:150px;text-align:center">{{ monthLabel }}</span>
+            <button onClick="{{ nextMonth }}" class="btn btn-ghost btn-icon" style="width:30px;height:30px;padding:0">â€º</button>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:16px;font-size:11.5px;color:var(--color-neutral-400)">
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:2px;background:var(--pos);display:block"></i>DÃ­a positivo</span>
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:2px;background:var(--neg);display:block"></i>DÃ­a negativo</span>
+            <span style="display:flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:2px;background:var(--color-neutral-700);display:block"></i>Sin operativa</span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px">
+          <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+            <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-500);padding:2px 4px 6px">{{ w }}</div>
+          </sc-for>
+          <sc-for list="{{ calendarCells }}" as="c" hint-placeholder-count="35">
+            <button onClick="{{ c.open }}" style="{{ c.style }}" style-hover="border-color:var(--color-accent);transform:translateY(-1px)">
+              <span style="font-size:11.5px;color:var(--color-neutral-400);font-variant-numeric:tabular-nums">{{ c.day }}</span>
+              <sc-if value="{{ c.hasTrades }}" hint-placeholder-val="{{ true }}">
+                <span style="font-family:var(--font-heading);font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;color:{{ c.color }}">{{ c.pnl }}</span>
+                <span style="font-size:10.5px;color:var(--color-neutral-500)">{{ c.count }}</span>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+          <sc-for list="{{ monthSummary }}" as="s" hint-placeholder-count="4">
+            <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-500)">{{ s.label }}</span>
+              <span style="font-family:var(--font-heading);font-size:20px;font-weight:500;color:{{ s.color }}">{{ s.value }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- NOTIFICACIONES -->
+      <sc-if value="{{ isNotifications }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:840px">
+          <sc-for list="{{ notifications }}" as="n" hint-placeholder-count="5">
+            <div class="card" style="{{ n.style }}">
+              <div style="display:flex;align-items:flex-start;gap:13px">
+                <div style="width:30px;height:30px;flex:none;border-radius:50%;background:var(--color-neutral-800);border:1px solid var(--color-neutral-700);display:flex;align-items:center;justify-content:center;font-size:13px">{{ n.icon }}</div>
+                <div style="display:flex;flex-direction:column;gap:6px;min-width:0;flex:1">
+                  <div style="display:flex;align-items:baseline;gap:10px">
+                    <span style="font-size:13px;font-weight:500">{{ n.title }}</span>
+                    <span class="tag tag-outline" style="font-size:10px">{{ n.kind }}</span>
+                    <span style="margin-left:auto;font-size:11px;color:var(--color-neutral-500)">{{ n.time }}</span>
+                  </div>
+                  <p style="margin:0;font-size:12.5px;line-height:1.55;color:var(--color-neutral-300);text-wrap:pretty">{{ n.body }}</p>
+                  <sc-if value="{{ n.tradeRef }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ n.open }}" class="btn btn-ghost" style="align-self:flex-start;font-size:11.5px;padding:5px 9px;margin-top:2px">Ver operaciÃ³n Â· {{ n.tradeRef }}</button>
+                  </sc-if>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- OBJETIVOS -->
+      <sc-if value="{{ isGoals }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+          <sc-for list="{{ goals }}" as="g" hint-placeholder-count="4">
+            <div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:baseline;gap:10px">
+                <span style="font-family:var(--font-heading);font-size:14px">{{ g.name }}</span>
+                <span class="tag" style="{{ g.tagStyle }}">{{ g.status }}</span>
+              </div>
+              <p style="margin:0;font-size:12px;color:var(--color-neutral-400);line-height:1.5">{{ g.description }}</p>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <div style="height:6px;border-radius:4px;background:var(--color-neutral-800);overflow:hidden">
+                  <div style="{{ g.barStyle }}"></div>
+                </div>
+                <div style="display:flex;font-size:11.5px;color:var(--color-neutral-500)">
+                  <span>{{ g.current }} de {{ g.target }}</span>
+                  <span style="margin-left:auto;color:var(--color-neutral-300)">{{ g.pct }}%</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:12px;font-size:11px;color:var(--color-neutral-500);border-top:1px solid var(--color-neutral-800);padding-top:10px">
+                <span>Vence {{ g.due }}</span>
+                <sc-if value="{{ isMentor }}" hint-placeholder-val="{{ true }}">
+                  <button class="btn btn-ghost" style="margin-left:auto;font-size:11px;padding:3px 8px">Editar</button>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- NIVELES -->
+      <sc-if value="{{ isLevels }}" hint-placeholder-val="{{ true }}">
+        <div class="card" style="padding:22px 24px;display:flex;flex-direction:column;gap:18px;max-width:920px">
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="width:58px;height:58px;border:1px solid var(--color-accent);border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-size:22px;box-shadow:0 0 26px -8px var(--color-accent)">3</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:var(--font-heading);font-size:17px">Nivel 3 Â· Consistencia</span>
+              <span style="font-size:12px;color:var(--color-neutral-400)">Objetivo del nivel: generar $2,000 con Profit Factor sostenido sobre 1.8</span>
+            </div>
+            <div style="margin-left:auto;text-align:right">
+              <div style="font-family:var(--font-heading);font-size:24px">64%</div>
+              <div style="font-size:11px;color:var(--color-neutral-500)">completado</div>
+            </div>
+          </div>
+          <div style="height:8px;border-radius:5px;background:var(--color-neutral-800);overflow:hidden">
+            <div style="width:64%;height:100%;background:linear-gradient(90deg,var(--color-accent-600),var(--color-accent));border-radius:5px"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+            <sc-for list="{{ levelReqs }}" as="r" hint-placeholder-count="4">
+              <div style="border:1px solid var(--color-neutral-800);border-radius:var(--radius-md);padding:13px 15px;display:flex;flex-direction:column;gap:5px">
+                <span style="font-size:11.5px;color:var(--color-neutral-400)">{{ r.label }}</span>
+                <span style="font-size:14px;color:{{ r.color }}">{{ r.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <sc-for list="{{ levels }}" as="l" hint-placeholder-count="5">
+            <div style="{{ l.style }}">
+              <span style="font-family:var(--font-heading);font-size:13px">{{ l.name }}</span>
+              <span style="font-size:11.5px;color:var(--color-neutral-400)">{{ l.goal }}</span>
+              <span style="font-size:11px;color:{{ l.stateColor }}">{{ l.state }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- MENTOR: DASHBOARD GENERAL -->
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+          <sc-for list="{{ mentorStats }}" as="k" hint-placeholder-count="5">
+            <div class="card" style="padding:16px 17px;display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-500)">{{ k.label }}</span>
+              <span style="font-family:var(--font-heading);font-size:24px;font-weight:500;color:{{ k.color }}">{{ k.value }}</span>
+              <span style="font-size:11.5px;color:var(--color-neutral-400)">{{ k.sub }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+          <h2 style="margin:0;font-family:var(--font-heading);font-size:14px;font-weight:500">Ranking de estudiantes</h2>
+          <table class="table" style="width:100%;font-size:12px">
+            <thead><tr><th style="text-align:left">#</th><th style="text-align:left">Estudiante</th><th style="text-align:left">Nivel</th><th style="text-align:right">Balance</th><th style="text-align:right">Win Rate</th><th style="text-align:right">Profit Factor</th><th style="text-align:right">Drawdown</th><th></th></tr></thead>
+            <tbody>
+              <sc-for list="{{ ranking }}" as="s" hint-placeholder-count="6">
+                <tr style-hover="background:var(--color-neutral-800)">
+                  <td style="color:var(--color-neutral-500)">{{ s.rank }}</td>
+                  <td>{{ s.name }}</td>
+                  <td><span class="tag tag-outline" style="font-size:10px">{{ s.level }}</span></td>
+                  <td style="text-align:right;font-variant-numeric:tabular-nums;color:{{ s.color }}">{{ s.balance }}</td>
+                  <td style="text-align:right;font-variant-numeric:tabular-nums">{{ s.winRate }}</td>
+                  <td style="text-align:right;font-variant-numeric:tabular-nums">{{ s.pf }}</td>
+                  <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--neg)">{{ s.dd }}</td>
+                  <td style="text-align:right"><button onClick="{{ s.open }}" class="btn btn-ghost" style="font-size:11px;padding:3px 8px">Abrir</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </sc-if>
+
+      <!-- COMPARADOR -->
+      <sc-if value="{{ isCompare }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <sc-for list="{{ compareChips }}" as="c" hint-placeholder-count="6">
+            <button onClick="{{ c.toggle }}" style="{{ c.style }}">{{ c.name }}</button>
+          </sc-for>
+        </div>
+        <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:18px">
+          <sc-for list="{{ compareRows }}" as="row" hint-placeholder-count="6">
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:baseline">
+                <span style="font-size:12px;color:var(--color-neutral-300)">{{ row.metric }}</span>
+                <span style="margin-left:auto;font-size:11px;color:var(--color-neutral-500)">{{ row.hint }}</span>
+              </div>
+              <sc-for list="{{ row.bars }}" as="b" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:11px">
+                  <span style="width:96px;flex:none;font-size:11.5px;color:var(--color-neutral-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.name }}</span>
+                  <div style="flex:1;height:8px;border-radius:5px;background:var(--color-neutral-800);overflow:hidden"><div style="{{ b.barStyle }}"></div></div>
+                  <span style="width:64px;text-align:right;font-size:11.5px;font-variant-numeric:tabular-nums">{{ b.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+    </div>
+  </main>
+
+  <!-- MODAL TRADE -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" onClick="{{ closeModal }}" style="position:fixed;inset:0;background:color-mix(in oklab,#05060c 72%,transparent);backdrop-filter:blur(3px);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:44px 20px;overflow:auto">
+      <div class="dialog" onClick="{{ stop }}" style="width:min(940px,100%);background:var(--color-neutral-900);border:1px solid var(--color-neutral-700);border-radius:14px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:smRise .22s ease both">
+
+        <div style="display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--color-neutral-800)">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <span style="font-family:var(--font-heading);font-size:15px">{{ modalTitle }}</span>
+            <span style="font-size:11.5px;color:var(--color-neutral-500)">{{ modalDate }}</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <div style="display:flex;gap:3px;padding:3px;border:1px solid var(--color-neutral-800);border-radius:9px">
+              <button onClick="{{ setFlowTabs }}" style="{{ flowTabsStyle }}">PestaÃ±as</button>
+              <button onClick="{{ setFlowSteps }}" style="{{ flowStepsStyle }}">Por pasos</button>
+            </div>
+            <button onClick="{{ closeModal }}" class="btn btn-ghost btn-icon" style="width:30px;height:30px;padding:0">âœ•</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:4px;padding:12px 22px 0">
+          <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4">
+            <button onClick="{{ s.go }}" style="{{ s.style }}">
+              <span style="{{ s.numStyle }}">{{ s.num }}</span>{{ s.label }}
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="padding:18px 22px 22px;display:flex;flex-direction:column;gap:20px;max-height:62vh;overflow:auto">
+
+          <sc-if value="{{ showBasic }}" hint-placeholder-val="{{ true }}">
+            <section style="display:flex;flex-direction:column;gap:12px">
+              <h3 style="margin:0;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--color-neutral-500)">InformaciÃ³n bÃ¡sica</h3>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+                <sc-for list="{{ basicFields }}" as="f" hint-placeholder-count="9">
+                  <label class="field" style="display:flex;flex-direction:column;gap:5px">
+                    <span style="font-size:11px;color:var(--color-neutral-400)">{{ f.label }}</span>
+                    <input class="input" value="{{ f.value }}" readOnly="{{ true }}" style="background:var(--color-neutral-800);border:1px solid var(--color-neutral-700);border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--color-text);font-family:var(--font-body)">
+                  </label>
+                </sc-for>
+                <div class="field" style="display:flex;flex-direction:column;gap:5px">
+                  <span style="font-size:11px;color:var(--color-neutral-400)">DirecciÃ³n</span>
+                  <div style="display:flex;gap:5px;padding:3px;border:1px solid var(--color-neutral-700);border-radius:9px;background:var(--color-neutral-800)">
+                    <button onClick="{{ setLong }}" style="{{ longStyle }}">Long</button>
+                    <button onClick="{{ setShort }}" style="{{ shortStyle }}">Short</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{ showRisk }}" hint-placeholder-val="{{ true }}">
+            <section style="display:flex;flex-direction:column;gap:12px">
+              <h3 style="margin:0;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--color-neutral-500)">GestiÃ³n del riesgo y resultado</h3>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+                <sc-for list="{{ riskFields }}" as="f" hint-placeholder-count="7">
+                  <label class="field" style="display:flex;flex-direction:column;gap:5px">
+                    <span style="font-size:11px;color:var(--color-neutral-400)">{{ f.label }}</span>
+                    <input class="input" value="{{ f.value }}" readOnly="{{ true }}" style="background:var(--color-neutral-800);border:1px solid var(--color-neutral-700);border-radius:8px;padding:8px 10px;font-size:12.5px;color:{{ f.color }};font-family:var(--font-body)">
+                  </label>
+                </sc-for>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{ showStrategy }}" hint-placeholder-val="{{ true }}">
+            <section style="display:flex;flex-direction:column;gap:12px">
+              <h3 style="margin:0;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--color-neutral-500)">InformaciÃ³n estratÃ©gica</h3>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+                <sc-for list="{{ strategyFields }}" as="f" hint-placeholder-count="5">
+                  <label class="field" style="display:flex;flex-direction:column;gap:5px">
+                    <span style="font-size:11px;color:var(--color-neutral-400)">{{ f.label }}</span>
+                    <input class="input" value="{{ f.value }}" readOnly="{{ true }}" style="background:var(--color-neutral-800);border:1px solid var(--color-neutral-700);border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--color-text);font-family:var(--font-body)">
+                  </label>
+                </sc-for>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{ showJournal }}" hint-placeholder-val="{{ true }}">
+            <section style="display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:baseline;gap:10px">
+                <h3 style="margin:0;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--color-neutral-500)">BitÃ¡cora de la operaciÃ³n</h3>
+                <span style="font-size:11px;color:var(--color-neutral-500)">Lo que escribas aquÃ­ es lo que tu mentor va a leer</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
+                <sc-for list="{{ journalFields }}" as="j" hint-placeholder-count="6">
+                  <label style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-size:11.5px;color:var(--color-neutral-300)">{{ j.label }}</span>
+                    <textarea rows="{{ 3 }}" defaultValue="{{ j.value }}" style="background:var(--color-neutral-800);border:1px solid var(--color-neutral-700);border-radius:9px;padding:9px 11px;font-size:12.5px;line-height:1.55;color:var(--color-text);font-family:var(--font-body);resize:vertical"></textarea>
+                  </label>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <span style="font-size:11.5px;color:var(--color-neutral-300)">Estado emocional</span>
+                <sc-for list="{{ emotionGroups }}" as="g" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <span style="width:70px;flex:none;font-size:11px;color:var(--color-neutral-500)">{{ g.phase }}</span>
+                    <sc-for list="{{ g.tags }}" as="t" hint-placeholder-count="5">
+                      <button onClick="{{ t.toggle }}" style="{{ t.style }}">{{ t.name }}</button>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <sc-for list="{{ captures }}" as="c" hint-placeholder-count="2">
+                  <div style="border:1px dashed var(--color-neutral-700);border-radius:10px;height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:var(--color-neutral-800)">
+                    <span style="font-size:12px;color:var(--color-neutral-400)">{{ c.label }}</span>
+                    <span style="font-size:11px;color:var(--color-neutral-500)">Arrastra la captura del grÃ¡fico</span>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{ isMentor }}" hint-placeholder-val="{{ false }}">
+            <section style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--color-neutral-800);padding-top:16px">
+              <h3 style="margin:0;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--color-accent-300)">RetroalimentaciÃ³n del mentor</h3>
+              <textarea rows="{{ 3 }}" placeholder="Escribe tu observaciÃ³n. LlegarÃ¡ al centro de notificaciones del estudiante." style="background:var(--color-neutral-800);border:1px solid var(--color-accent-800);border-radius:9px;padding:10px 12px;font-size:12.5px;line-height:1.55;color:var(--color-text);font-family:var(--font-body);resize:vertical"></textarea>
+            </section>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--color-neutral-800)">
+          <span style="font-size:11.5px;color:var(--color-neutral-500)">{{ modalFooterNote }}</span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button onClick="{{ closeModal }}" class="btn btn-ghost" style="font-size:12px;padding:8px 13px">Cancelar</button>
+            <sc-if value="{{ hasNextStep }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ nextStep }}" class="btn btn-primary" style="font-size:12px;padding:8px 15px">Continuar</button>
+            </sc-if>
+            <sc-if value="{{ showSave }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ closeModal }}" class="btn btn-primary" style="font-size:12px;padding:8px 15px">{{ saveLabel }}</button>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960}}">
+const POS = 'oklch(0.76 0.11 162)';
+const NEG = 'oklch(0.68 0.15 22)';
+const MUT = 'var(--color-neutral-400)';
+const money = (n) => (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+const STUDENTS = [
+  { id: 's1', name: 'Andrea Lozano', level: 'Nivel 3', balance: 28430, winRate: 61, pf: 2.12, dd: -4.2, consistency: 78, trades: 142, risk: 0.9, ret: 13.7 },
+  { id: 's2', name: 'Bruno Estrada', level: 'Nivel 2', balance: 12180, winRate: 54, pf: 1.44, dd: -8.9, consistency: 52, trades: 96, risk: 1.6, ret: 6.1 },
+  { id: 's3', name: 'Camila Reyes', level: 'Nivel 4', balance: 41250, winRate: 58, pf: 2.68, dd: -3.1, consistency: 88, trades: 205, risk: 0.7, ret: 21.4 },
+  { id: 's4', name: 'Diego Fuentes', level: 'Nivel 1', balance: 4870, winRate: 41, pf: 0.86, dd: -14.5, consistency: 29, trades: 61, risk: 2.4, ret: -5.3 },
+  { id: 's5', name: 'Elena MÃ¡rquez', level: 'Nivel 2', balance: 15640, winRate: 57, pf: 1.71, dd: -6.4, consistency: 64, trades: 118, risk: 1.2, ret: 9.2 }
+];
+
+const TRADES = [
+  { day: 3, asset: 'SPY', market: 'Ãndices', direction: 'Long', setup: 'Breakout de rango', r: 2.1, pnl: 420, tf: '5m' },
+  { day: 3, asset: 'AAPL', market: 'Acciones', direction: 'Short', setup: 'Fallo de continuaciÃ³n', r: -1.0, pnl: -180, tf: '15m' },
+  { day: 6, asset: 'QQQ', market: 'Ãndices', direction: 'Long', setup: 'Retest de VWAP', r: 1.4, pnl: 265, tf: '5m' },
+  { day: 9, asset: 'NVDA', market: 'Acciones', direction: 'Long', setup: 'Order block H1', r: -1.0, pnl: -310, tf: '1h' },
+  { day: 10, asset: 'SPY', market: 'Ãndices', direction: 'Short', setup: 'Barrido de liquidez', r: 3.2, pnl: 640, tf: '5m' },
+  { day: 13, asset: 'MSFT', market: 'Acciones', direction: 'Long', setup: 'Retest de VWAP', r: 0.8, pnl: 145, tf: '15m' },
+  { day: 15, asset: 'IWM', market: 'Ãndices', direction: 'Short', setup: 'Breakout fallido', r: -1.2, pnl: -240, tf: '5m' },
+  { day: 17, asset: 'AAPL', market: 'Opciones', direction: 'Long', setup: 'Gap and go', r: 2.6, pnl: 510, tf: '5m' },
+  { day: 20, asset: 'SPY', market: 'Ãndices', direction: 'Long', setup: 'Order block H1', r: 1.9, pnl: 375, tf: '1h' },
+  { day: 21, asset: 'TSLA', market: 'Acciones', direction: 'Short', setup: 'Barrido de liquidez', r: -1.0, pnl: -220, tf: '15m' },
+  { day: 24, asset: 'QQQ', market: 'Ãndices', direction: 'Long', setup: 'Retest de VWAP', r: 2.4, pnl: 480, tf: '5m' },
+  { day: 27, asset: 'META', market: 'Opciones', direction: 'Long', setup: 'Gap and go', r: 1.1, pnl: 205, tf: '15m' },
+  { day: 28, asset: 'SPY', market: 'Ãndices', direction: 'Short', setup: 'Breakout de rango', r: -0.6, pnl: -95, tf: '5m' }
+];
+
+const EMOTIONS = ['Calma', 'Confianza', 'FOMO', 'Ansiedad', 'Impaciencia', 'FrustraciÃ³n', 'Enfoque'];
+
+class Component extends DCLogic {
+  state = {
+    role: 'student', screen: 'dashboard', studentId: 's1',
+    month: 7, modal: null, flow: 'tabs', step: 0, tab: 0,
+    direction: 'Long',
+    emotions: { antes: ['Calma'], durante: ['Enfoque'], despues: ['Confianza'] },
+    compare: ['s1', 's3', 's4']
+  };
+
+  go = (screen) => () => this.setState({ screen });
+
+  renderVals() {
+    const S = this.state;
+    const isMentor = S.role === 'mentor';
+    const student = STUDENTS.find((s) => s.id === S.studentId) || STUDENTS[0];
+    const navDef = isMentor
+      ? [['overview', 'Panel general', 'â—ˆ'], ['dashboard', 'Dashboard del alumno', 'â—'], ['calendar', 'Calendario', 'â–¦'], ['compare', 'Comparador', 'â‡„'], ['goals', 'Objetivos', 'â—Ž'], ['levels', 'Niveles', 'â—†'], ['notifications', 'Mensajes enviados', 'âœ‰', 3]]
+      : [['dashboard', 'Dashboard', 'â—'], ['calendar', 'Calendario', 'â–¦'], ['notifications', 'Notificaciones', 'âœ‰', 3], ['goals', 'Objetivos', 'â—Ž'], ['levels', 'Mi nivel', 'â—†']];
+
+    const nav = navDef.map(([id, label, icon, badge]) => ({
+      label, icon, badge,
+      go: this.go(id),
+      style: `display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 9px;border:0;border-radius:8px;cursor:pointer;font-family:var(--font-body);font-size:12.5px;transition:background .15s,color .15s;background:${S.screen === id ? 'var(--color-accent-900)' : 'transparent'};color:${S.screen === id ? 'var(--color-accent-200)' : 'var(--color-neutral-400)'};box-shadow:${S.screen === id ? 'inset 2px 0 0 var(--color-accent)' : 'none'}`
+    }));
+
+    const seg = (on) => `flex:1;padding:6px 10px;border:0;border-radius:7px;cursor:pointer;font-family:var(--font-body);font-size:11.5px;background:${on ? 'var(--color-accent-900)' : 'transparent'};color:${on ? 'var(--color-accent-200)' : 'var(--color-neutral-400)'}`;
+
+    const titles = {
+      dashboard: [isMentor ? student.name : 'Hola, Andrea', isMentor ? 'Dashboard del estudiante Â· mismo detalle que ve el alumno' : 'AsÃ­ va tu cuenta este mes. Vas por buen camino.'],
+      calendar: ['Calendario de trading', isMentor ? 'Revisa cada dÃ­a operado y deja retroalimentaciÃ³n' : 'Haz clic en un dÃ­a para registrar o revisar tus operaciones'],
+      notifications: [isMentor ? 'Mensajes enviados' : 'Centro de notificaciones', isMentor ? 'RetroalimentaciÃ³n que le has dejado a tus estudiantes' : 'RetroalimentaciÃ³n y observaciones de tu mentor'],
+      goals: ['Objetivos', isMentor ? 'Asigna y da seguimiento a los objetivos del estudiante' : 'Lo que tu mentor definiÃ³ para ti este ciclo'],
+      levels: [isMentor ? 'Niveles del programa' : 'Mi progreso por niveles', isMentor ? 'Configura los niveles y sus requisitos' : 'Cada nivel se desbloquea con resultados, no con tiempo'],
+      overview: ['Panel general', 'CÃ³mo va el grupo completo de estudiantes'],
+      compare: ['Comparador de estudiantes', 'Selecciona a quiÃ©n comparar y sobre quÃ© mÃ©tricas']
+    };
+    const [screenTitle, screenSub] = titles[S.screen] || ['', ''];
+
+    // equity
+    const eq = [];
+    let bal = 25000;
+    TRADES.forEach((t) => { bal += t.pnl; eq.push({ day: t.day, bal }); });
+    const vals = eq.map((e) => e.bal);
+    const min = Math.min(25000, ...vals) - 300, max = Math.max(...vals) + 300;
+    const px = (i) => (i / (eq.length - 1)) * 720;
+    const py = (v) => 200 - ((v - min) / (max - min)) * 180;
+    const equityPath = eq.map((e, i) => `${i ? 'L' : 'M'}${px(i).toFixed(1)},${py(e.bal).toFixed(1)}`).join(' ');
+    const equityArea = `${equityPath} L720,210 L0,210 Z`;
+
+    const wins = TRADES.filter((t) => t.pnl > 0), losses = TRADES.filter((t) => t.pnl <= 0);
+    const gross = wins.reduce((a, t) => a + t.pnl, 0), lost = Math.abs(losses.reduce((a, t) => a + t.pnl, 0));
+    const winRate = Math.round((wins.length / TRADES.length) * 100);
+    const net = gross - lost;
+    const avgWin = gross / wins.length, avgLoss = lost / losses.length;
+
+    const heroStats = [
+      { label: 'Balance actual', value: money(25000 + net), sub: 'Cuenta de $25,000', color: 'var(--color-text)' },
+      { label: 'P&L acumulado', value: (net >= 0 ? '+' : '') + money(net), sub: ((net / 25000) * 100).toFixed(2) + '% sobre la cuenta', color: net >= 0 ? POS : NEG },
+      { label: 'Profit Factor', value: (gross / lost).toFixed(2), sub: 'Meta del nivel: 1.80', color: 'var(--color-text)' },
+      { label: 'Expectancy', value: '$' + (net / TRADES.length).toFixed(0) + ' / trade', sub: TRADES.length + ' operaciones este mes', color: 'var(--color-text)' }
+    ];
+
+    const qualityStats = [
+      { label: 'Ratio R:B promedio', value: '1 : ' + (avgWin / avgLoss).toFixed(2), color: 'var(--color-text)' },
+      { label: 'Promedio de ganancia', value: money(avgWin), color: POS },
+      { label: 'Promedio de pÃ©rdida', value: '-' + money(avgLoss), color: NEG },
+      { label: 'Mejor trade', value: money(Math.max(...TRADES.map((t) => t.pnl))), color: POS },
+      { label: 'Peor trade', value: money(Math.min(...TRADES.map((t) => t.pnl))), color: NEG },
+      { label: 'Tiempo promedio', value: '38 min', color: MUT }
+    ];
+
+    const monthsData = [['Ene', 820], ['Feb', -310], ['Mar', 1240], ['Abr', 640], ['May', -180], ['Jun', 1520], ['Jul', 980], ['Ago', net]];
+    const mmax = Math.max(...monthsData.map((m) => Math.abs(m[1])));
+    const monthlyBars = monthsData.map(([month, v]) => ({
+      month, label: (v >= 0 ? '+' : 'âˆ’') + '$' + Math.abs(v),
+      barStyle: `width:100%;height:${Math.max(6, (Math.abs(v) / mmax) * 88)}px;border-radius:4px;background:${v >= 0 ? 'linear-gradient(180deg,var(--color-accent),var(--color-accent-700))' : 'linear-gradient(180deg,' + NEG + ',color-mix(in oklab,' + NEG + ' 40%,transparent))'};transition:height .4s ease`
+    }));
+
+    const recentTrades = TRADES.slice().reverse().slice(0, 6).map((t) => ({
+      asset: t.asset, direction: t.direction, setup: t.setup,
+      r: (t.r > 0 ? '+' : '') + t.r.toFixed(1) + 'R',
+      pnl: (t.pnl > 0 ? '+' : '') + money(t.pnl),
+      color: t.pnl > 0 ? POS : NEG,
+      dirStyle: `font-size:10.5px;padding:2px 7px;border-radius:5px;border:1px solid ${t.direction === 'Long' ? 'color-mix(in oklab,' + POS + ' 45%,transparent)' : 'color-mix(in oklab,' + NEG + ' 45%,transparent)'};color:${t.direction === 'Long' ? POS : NEG}`,
+      open: () => this.setState({ modal: t, step: 0, tab: 0, direction: t.direction })
+    }));
+
+    // calendar
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const first = new Date(2026, S.month, 1).getDay();
+    const offset = (first + 6) % 7;
+    const daysIn = new Date(2026, S.month + 1, 0).getDate();
+    const byDay = {};
+    if (S.month === 7) TRADES.forEach((t) => { (byDay[t.day] = byDay[t.day] || []).push(t); });
+    const calendarCells = [];
+    for (let i = 0; i < offset; i++) calendarCells.push({ day: '', style: 'border:0;background:transparent;min-height:92px', open: () => {} });
+    for (let d = 1; d <= daysIn; d++) {
+      const list = byDay[d] || [];
+      const sum = list.reduce((a, t) => a + t.pnl, 0);
+      const has = list.length > 0;
+      const tint = !has ? 'transparent' : sum >= 0 ? 'color-mix(in oklab,' + POS + ' 12%,transparent)' : 'color-mix(in oklab,' + NEG + ' 12%,transparent)';
+      const bord = !has ? 'var(--color-neutral-800)' : sum >= 0 ? 'color-mix(in oklab,' + POS + ' 40%,transparent)' : 'color-mix(in oklab,' + NEG + ' 40%,transparent)';
+      calendarCells.push({
+        day: d, hasTrades: has, count: list.length + (list.length === 1 ? ' trade' : ' trades'),
+        pnl: (sum >= 0 ? '+' : '') + money(sum), color: sum >= 0 ? POS : NEG,
+        style: `min-height:92px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:9px 10px;border:1px solid ${bord};border-radius:10px;background:${tint};cursor:pointer;font-family:var(--font-body);transition:transform .12s,border-color .12s;text-align:left`,
+        open: () => this.setState({ modal: list[0] || { day: d, asset: 'SPY', market: 'Ãndices', direction: 'Long', setup: '', r: 0, pnl: 0, tf: '5m', isNew: !list.length }, step: 0, tab: 0, direction: 'Long' })
+      });
+    }
+    const monthNet = Object.values(byDay).flat().reduce((a, t) => a + t.pnl, 0);
+    const posDays = Object.values(byDay).filter((l) => l.reduce((a, t) => a + t.pnl, 0) > 0).length;
+    const monthSummary = [
+      { label: 'Resultado del mes', value: (monthNet >= 0 ? '+' : '') + money(monthNet), color: monthNet >= 0 ? POS : NEG },
+      { label: 'DÃ­as operados', value: String(Object.keys(byDay).length), color: 'var(--color-text)' },
+      { label: 'DÃ­as positivos', value: posDays + ' de ' + Object.keys(byDay).length, color: POS },
+      { label: 'Mejor dÃ­a', value: '+$640', color: POS }
+    ];
+
+    // modal
+    const m = S.modal;
+    const steps = ['Datos', 'Riesgo y resultado', 'Estrategia', 'BitÃ¡cora'].map((label, i) => {
+      const active = S.flow === 'tabs' ? (i < 3 ? S.tab === 0 : S.tab === 1) : S.step === i;
+      return {
+        label: S.flow === 'tabs' && i < 3 ? label : label, num: i + 1, go: () => this.setState(S.flow === 'tabs' ? { tab: i < 3 ? 0 : 1 } : { step: i }),
+        style: `display:flex;align-items:center;gap:7px;padding:8px 12px;border:0;border-bottom:2px solid ${active ? 'var(--color-accent)' : 'transparent'};background:transparent;cursor:pointer;font-family:var(--font-body);font-size:12px;color:${active ? 'var(--color-text)' : 'var(--color-neutral-500)'}`,
+        numStyle: `width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;border:1px solid ${active ? 'var(--color-accent)' : 'var(--color-neutral-700)'};color:${active ? 'var(--color-accent-200)' : 'var(--color-neutral-500)'}`
+      };
+    });
+    const stepsMode = S.flow === 'steps';
+    const showBasic = stepsMode ? S.step === 0 : S.tab === 0;
+    const showRisk = stepsMode ? S.step === 1 : S.tab === 0;
+    const showStrategy = stepsMode ? S.step === 2 : S.tab === 0;
+    const showJournal = stepsMode ? S.step === 3 : S.tab === 1;
+
+    const emotionGroups = ['antes', 'durante', 'despues'].map((phase) => ({
+      phase: phase === 'despues' ? 'DespuÃ©s' : phase.charAt(0).toUpperCase() + phase.slice(1),
+      tags: EMOTIONS.map((name) => {
+        const on = (S.emotions[phase] || []).includes(name);
+        return {
+          name,
+          style: `padding:5px 11px;border-radius:20px;cursor:pointer;font-family:var(--font-body);font-size:11.5px;border:1px solid ${on ? 'var(--color-accent)' : 'var(--color-neutral-700)'};background:${on ? 'var(--color-accent-900)' : 'transparent'};color:${on ? 'var(--color-accent-200)' : 'var(--color-neutral-400)'};transition:all .15s`,
+          toggle: () => this.setState((st) => {
+            const cur = st.emotions[phase] || [];
+            return { emotions: { ...st.emotions, [phase]: cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name] } };
+          })
+        };
+      })
+    }));
+
+    const compareSel = STUDENTS.filter((s) => S.compare.includes(s.id));
+    const metricDefs = [
+      ['Balance', (s) => s.balance, (v) => money(v), 'mayor es mejor'],
+      ['Profit Factor', (s) => s.pf, (v) => v.toFixed(2), 'meta > 2.00'],
+      ['Win Rate', (s) => s.winRate, (v) => v + '%', 'contexto: depende del R:B'],
+      ['Drawdown mÃ¡ximo', (s) => Math.abs(s.dd), (v) => '-' + v.toFixed(1) + '%', 'menor es mejor'],
+      ['Rentabilidad', (s) => s.ret, (v) => v.toFixed(1) + '%', 'sobre el capital inicial'],
+      ['Consistencia', (s) => s.consistency, (v) => v + '/100', 'regularidad de resultados'],
+      ['Riesgo promedio', (s) => s.risk, (v) => v.toFixed(1) + '%', 'por operaciÃ³n'],
+      ['Operaciones', (s) => s.trades, (v) => String(v), 'volumen del periodo']
+    ];
+
+    return {
+      isMentor, roleLabel: isMentor ? 'Mentor' : 'Estudiante', nav,
+      setStudent: () => this.setState({ role: 'student', screen: 'dashboard' }),
+      setMentor: () => this.setState({ role: 'mentor', screen: 'overview' }),
+      segStudent: seg(!isMentor), segMentor: seg(isMentor),
+      userName: isMentor ? 'Marco Villalobos' : 'Andrea Lozano',
+      userInitials: isMentor ? 'MV' : 'AL',
+      userMeta: isMentor ? 'Mentor Â· 5 estudiantes' : 'Nivel 3 Â· Consistencia',
+      screenTitle, screenSub, screen: S.screen,
+      students: STUDENTS, studentId: S.studentId,
+      pickStudent: (e) => this.setState({ studentId: e.target.value }),
+      openNew: () => this.setState({ modal: { day: 28, asset: 'SPY', market: 'Ãndices', direction: 'Long', setup: '', r: 0, pnl: 0, tf: '5m', isNew: true }, step: 0, tab: 0 }),
+      goCalendar: this.go('calendar'),
+      goLevels: this.go('levels'),
+      isStudent: !isMentor,
+
+      isDashboard: S.screen === 'dashboard', isCalendar: S.screen === 'calendar',
+      isNotifications: S.screen === 'notifications', isGoals: S.screen === 'goals',
+      isLevels: S.screen === 'levels', isOverview: S.screen === 'overview', isCompare: S.screen === 'compare',
+
+      heroStats, qualityStats, monthlyBars, recentTrades,
+      equityPath, equityArea, equityDelta: (net >= 0 ? '+' : '') + money(net) + ' en el periodo',
+      equityTicks: ['1 ago', '8 ago', '15 ago', '22 ago', '29 ago'],
+      gridLines: [20, 65, 110, 155, 200].map((y) => ({ y })),
+      winRate, winDash: `${(winRate / 100) * 264} 264`,
+      winsLosses: wins.length + ' ganadoras Â· ' + losses.length + ' perdedoras',
+
+      weekdays: ['Lun', 'Mar', 'MiÃ©', 'Jue', 'Vie', 'SÃ¡b', 'Dom'],
+      calendarCells, monthSummary, monthLabel: monthNames[S.month] + ' 2026',
+      prevMonth: () => this.setState((st) => ({ month: (st.month + 11) % 12 })),
+      nextMonth: () => this.setState((st) => ({ month: (st.month + 1) % 12 })),
+
+      notifications: [
+        { icon: 'â—†', title: 'Excelente ejecuciÃ³n en SPY', kind: 'FelicitaciÃ³n', time: 'Hace 2 h', tradeRef: 'SPY Â· 20 ago', body: 'Respetaste el stop y dejaste correr el trade hasta la zona de liquidez. Eso es exactamente lo que venÃ­amos trabajando: paciencia despuÃ©s de la entrada. Repite este patrÃ³n.' },
+        { icon: 'âœŽ', title: 'Revisa tu tamaÃ±o de posiciÃ³n del dÃ­a 21', kind: 'CorrecciÃ³n', time: 'Ayer', tradeRef: 'TSLA Â· 21 ago', body: 'Arriesgaste 2.1% en una entrada sin confirmaciÃ³n de estructura. Bajemos a 1% hasta cerrar el mes con Profit Factor sobre 2.' },
+        { icon: 'â˜°', title: 'Tu bitÃ¡cora del 17 quedÃ³ incompleta', kind: 'Recordatorio', time: 'Hace 3 dÃ­as', tradeRef: 'AAPL Â· 17 ago', body: 'Falta el estado emocional durante la operaciÃ³n y la captura posterior. Sin eso no puedo evaluar tu proceso, solo el resultado.' },
+        { icon: 'â—', title: 'ObservaciÃ³n sobre tu horario de operativa', kind: 'ObservaciÃ³n', time: 'Hace 5 dÃ­as', body: 'El 70% de tus pÃ©rdidas ocurren despuÃ©s de las 11:30. Propongo que cierres la sesiÃ³n al mediodÃ­a durante dos semanas y midamos la diferencia.' },
+        { icon: 'â—†', title: 'Vas 64% del Nivel 3', kind: 'Progreso', time: 'Hace 1 semana', body: 'Si mantienes el ritmo actual cierras el nivel antes de terminar septiembre. EnfÃ³cate en no romper la regla de riesgo diario.' }
+      ].map((n) => ({ ...n, open: () => this.setState({ modal: TRADES[8], step: 0, tab: 1 }), style: 'padding:15px 17px;border-radius:var(--radius-md);border-left:2px solid var(--color-accent-700)' })),
+
+      goals: [
+        { name: 'Generar $2,000', description: 'Objetivo econÃ³mico del Nivel 3, con cuenta de $25,000.', current: '$1,595', target: '$2,000', pct: 80, status: 'En curso', due: '30 sep' },
+        { name: 'Completar 30 operaciones', description: 'Volumen mÃ­nimo para que la muestra sea estadÃ­sticamente Ãºtil.', current: '13', target: '30', pct: 43, status: 'En curso', due: '30 sep' },
+        { name: 'Win Rate sobre 60%', description: 'Sostenido durante todo el mes de agosto.', current: '61%', target: '60%', pct: 100, status: 'Cumplido', due: '31 ago' },
+        { name: 'No exceder 2% de riesgo diario', description: 'Regla de gestiÃ³n. Una sola violaciÃ³n reinicia el conteo.', current: '19 dÃ­as', target: '22 dÃ­as', pct: 86, status: 'En riesgo', due: '31 ago' }
+      ].map((g) => ({
+        ...g,
+        barStyle: `width:${g.pct}%;height:100%;border-radius:4px;background:${g.status === 'En riesgo' ? NEG : 'linear-gradient(90deg,var(--color-accent-600),var(--color-accent))'};transition:width .5s ease`,
+        tagStyle: `font-size:10px;margin-left:auto;border:1px solid ${g.status === 'Cumplido' ? 'color-mix(in oklab,' + POS + ' 45%,transparent)' : g.status === 'En riesgo' ? 'color-mix(in oklab,' + NEG + ' 45%,transparent)' : 'var(--color-neutral-700)'};color:${g.status === 'Cumplido' ? POS : g.status === 'En riesgo' ? NEG : 'var(--color-neutral-400)'};background:transparent`
+      })),
+
+      levelReqs: [
+        { label: 'Ganancia acumulada', value: '$1,595 de $2,000', color: 'var(--color-text)' },
+        { label: 'Profit Factor mÃ­nimo', value: '2.12 Â· cumplido', color: POS },
+        { label: 'Operaciones mÃ­nimas', value: '13 de 30', color: MUT },
+        { label: 'Drawdown mÃ¡ximo', value: '-4.2% Â· dentro del lÃ­mite', color: POS }
+      ],
+      levels: [
+        { name: 'Nivel 1', goal: 'Generar $500', state: 'Completado' },
+        { name: 'Nivel 2', goal: 'Generar $1,000', state: 'Completado' },
+        { name: 'Nivel 3', goal: 'Generar $2,000', state: 'En curso Â· 64%' },
+        { name: 'Nivel 4', goal: 'Generar $5,000', state: 'Bloqueado' },
+        { name: 'Nivel 5', goal: 'Cuenta fondeada', state: 'Bloqueado' }
+      ].map((l, i) => ({
+        ...l,
+        stateColor: i < 2 ? POS : i === 2 ? 'var(--color-accent-200)' : 'var(--color-neutral-600)',
+        style: `flex:1;min-width:170px;display:flex;flex-direction:column;gap:5px;padding:14px 16px;border-radius:var(--radius-md);border:1px solid ${i === 2 ? 'var(--color-accent)' : 'var(--color-neutral-800)'};background:${i === 2 ? 'var(--color-accent-900)' : 'transparent'};opacity:${i > 2 ? 0.55 : 1}`
+      })),
+
+      mentorStats: [
+        { label: 'Estudiantes', value: '5', sub: '4 activos esta semana', color: 'var(--color-text)' },
+        { label: 'Rentabilidad promedio', value: '+9.0%', sub: 'sobre capital inicial', color: POS },
+        { label: 'Win Rate promedio', value: '54%', sub: '+3 pts vs julio', color: 'var(--color-text)' },
+        { label: 'Profit Factor promedio', value: '1.76', sub: 'meta del grupo: 2.00', color: 'var(--color-text)' },
+        { label: 'Requieren atenciÃ³n', value: '1', sub: 'Diego Fuentes Â· PF 0.86', color: NEG }
+      ],
+      ranking: STUDENTS.slice().sort((a, b) => b.ret - a.ret).map((s, i) => ({
+        rank: String(i + 1).padStart(2, '0'), name: s.name, level: s.level,
+        balance: money(s.balance), winRate: s.winRate + '%', pf: s.pf.toFixed(2), dd: s.dd.toFixed(1) + '%',
+        color: s.ret >= 0 ? 'var(--color-text)' : NEG,
+        open: () => this.setState({ studentId: s.id, screen: 'dashboard' })
+      })),
+
+      compareChips: STUDENTS.map((s) => {
+        const on = S.compare.includes(s.id);
+        return {
+          name: s.name,
+          style: `padding:7px 13px;border-radius:20px;cursor:pointer;font-family:var(--font-body);font-size:12px;border:1px solid ${on ? 'var(--color-accent)' : 'var(--color-neutral-700)'};background:${on ? 'var(--color-accent-900)' : 'transparent'};color:${on ? 'var(--color-accent-200)' : 'var(--color-neutral-400)'}`,
+          toggle: () => this.setState((st) => ({ compare: st.compare.includes(s.id) ? st.compare.filter((x) => x !== s.id) : [...st.compare, s.id] }))
+        };
+      }),
+      compareRows: metricDefs.map(([metric, get, fmt, hint]) => {
+        const maxv = Math.max(...compareSel.map(get), 0.0001);
+        return {
+          metric, hint,
+          bars: compareSel.map((s) => ({
+            name: s.name.split(' ')[0], value: fmt(get(s)),
+            barStyle: `width:${Math.max(3, (get(s) / maxv) * 100)}%;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--color-accent-700),var(--color-accent));transition:width .45s ease`
+          }))
+        };
+      }),
+
+      modalOpen: !!m,
+      stop: (e) => e.stopPropagation(),
+      closeModal: () => this.setState({ modal: null }),
+      modalTitle: m ? (m.isNew ? 'Registrar operaciÃ³n' : m.asset + ' Â· ' + m.setup) : '',
+      modalDate: m ? (m.isNew ? 'Nuevo registro Â· ' + m.day + ' de agosto, 2026' : m.day + ' de agosto, 2026 Â· ' + m.market + ' Â· ' + m.tf) : '',
+      modalFooterNote: isMentor ? 'Tu comentario llegarÃ¡ al estudiante al guardar' : 'Se guarda automÃ¡ticamente mientras escribes',
+      saveLabel: isMentor ? 'Enviar retroalimentaciÃ³n' : 'Guardar operaciÃ³n',
+      flow: S.flow,
+      setFlowTabs: () => this.setState({ flow: 'tabs', tab: 0 }),
+      setFlowSteps: () => this.setState({ flow: 'steps', step: 0 }),
+      flowTabsStyle: seg(S.flow === 'tabs') + ';flex:none;padding:5px 10px',
+      flowStepsStyle: seg(S.flow === 'steps') + ';flex:none;padding:5px 10px',
+      steps, showBasic, showRisk, showStrategy, showJournal,
+      hasNextStep: stepsMode && S.step < 3,
+      showSave: !stepsMode || S.step === 3,
+      nextStep: () => this.setState((st) => ({ step: Math.min(3, st.step + 1) })),
+      basicFields: m ? [
+        { label: 'Activo', value: m.asset }, { label: 'Mercado', value: m.market },
+        { label: 'Fecha', value: m.day + '/08/2026' }, { label: 'Hora de entrada', value: '09:47' },
+        { label: 'Hora de salida', value: '10:25' }, { label: 'Precio de entrada', value: '548.20' },
+        { label: 'Precio de salida', value: '551.40' }, { label: 'Contratos', value: '3' },
+        { label: 'TamaÃ±o de posiciÃ³n', value: '$16,446' }
+      ] : [],
+      riskFields: m ? [
+        { label: 'Stop Loss', value: '546.80', color: NEG },
+        { label: 'Take Profit', value: '552.10', color: POS },
+        { label: 'Riesgo en $', value: '$250', color: 'var(--color-text)' },
+        { label: 'Riesgo en %', value: '1.0%', color: 'var(--color-text)' },
+        { label: 'P&L ($)', value: (m.pnl >= 0 ? '+' : '') + money(m.pnl), color: m.pnl >= 0 ? POS : NEG },
+        { label: 'P&L (%)', value: ((m.pnl / 25000) * 100).toFixed(2) + '%', color: m.pnl >= 0 ? POS : NEG },
+        { label: 'R mÃºltiple', value: (m.r > 0 ? '+' : '') + m.r.toFixed(1) + 'R', color: m.r >= 0 ? POS : NEG }
+      ] : [],
+      strategyFields: m ? [
+        { label: 'Setup utilizado', value: m.setup || 'Retest de VWAP' },
+        { label: 'Temporalidad', value: m.tf },
+        { label: 'Condiciones del mercado', value: 'Tendencia alcista, volumen alto' },
+        { label: 'Tipo de entrada', value: 'A mercado tras confirmaciÃ³n' },
+        { label: 'Confirmaciones', value: 'Estructura + volumen + VWAP' }
+      ] : [],
+      journalFields: [
+        { label: 'Â¿Por quÃ© tomaste la operaciÃ³n?', value: 'Precio barriÃ³ los mÃ­nimos de la sesiÃ³n previa y regresÃ³ dentro del rango con volumen. EsperÃ© el retest de VWAP para entrar.' },
+        { label: 'Â¿QuÃ© viste en el mercado?', value: 'AbsorciÃ³n clara en la zona de liquidez y un cambio de carÃ¡cter en 5m.' },
+        { label: 'Â¿Seguiste tu plan?', value: 'SÃ­. Entrada, stop y objetivo definidos antes de ejecutar.' },
+        { label: 'Â¿QuÃ© hiciste bien?', value: 'No adelantÃ© la entrada y respetÃ© el tamaÃ±o de posiciÃ³n.' },
+        { label: 'Â¿QuÃ© hiciste mal?', value: 'MovÃ­ el stop a break even demasiado pronto; casi me saca del movimiento bueno.' },
+        { label: 'Â¿QuÃ© puedes mejorar?', value: 'Dejar el stop en su lugar hasta que el precio alcance 1R.' }
+      ],
+      emotionGroups,
+      captures: [{ label: 'Antes de la operaciÃ³n' }, { label: 'DespuÃ©s de la operaciÃ³n' }],
+      direction: S.direction,
+      setLong: () => this.setState({ direction: 'Long' }),
+      setShort: () => this.setState({ direction: 'Short' }),
+      longStyle: `flex:1;padding:7px 10px;border:0;border-radius:7px;cursor:pointer;font-family:var(--font-body);font-size:12px;background:${S.direction === 'Long' ? 'color-mix(in oklab,' + POS + ' 18%,transparent)' : 'transparent'};color:${S.direction === 'Long' ? POS : 'var(--color-neutral-500)'}`,
+      shortStyle: `flex:1;padding:7px 10px;border:0;border-radius:7px;cursor:pointer;font-family:var(--font-body);font-size:12px;background:${S.direction === 'Short' ? 'color-mix(in oklab,' + NEG + ' 18%,transparent)' : 'transparent'};color:${S.direction === 'Short' ? NEG : 'var(--color-neutral-500)'}`
+    };
+  }
+}
+</script>
+</body>
+</html>
