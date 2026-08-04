@@ -6,6 +6,7 @@ import { calendarAggregates } from '@/lib/metrics/periods'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { MonthSummary } from '@/components/calendar/MonthSummary'
+import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -35,10 +36,11 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
 export default async function CalendarioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ y?: string; m?: string }>
+  searchParams: Promise<{ y?: string; m?: string; trade?: string; nuevo?: string; fecha?: string }>
 }) {
   const user = await requireUser()
-  const { y, m } = await searchParams
+  const resolvedSearchParams = await searchParams
+  const { y, m, trade, nuevo, fecha } = resolvedSearchParams
   const { year, month } = resolveYearMonth(y, m)
 
   const db = getDb()
@@ -119,6 +121,8 @@ export default async function CalendarioPage({
 
         <MonthSummary summary={summary} />
       </div>
+
+      <TradeModalGate searchParams={{ trade, nuevo, fecha }} userId={user.id} />
     </>
   )
 }

@@ -13,6 +13,7 @@ import { WinRateDonut } from '@/components/dashboard/WinRateDonut'
 import { QualityStats } from '@/components/dashboard/QualityStats'
 import { MonthlyBars } from '@/components/dashboard/MonthlyBars'
 import { RecentTrades } from '@/components/dashboard/RecentTrades'
+import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
 
 const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const EQUITY_WINDOW_DAYS = 30
@@ -42,9 +43,14 @@ function lastMonths(n: number, now: Date): { year: number; month: number }[] {
   return months
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ trade?: string; nuevo?: string; fecha?: string }>
+}) {
   const user = await requireUser()
   const initialBalance = user.initialBalance!
+  const resolvedSearchParams = await searchParams
 
   const db = getDb()
   const trades = await listTrades(db, user.id)
@@ -72,6 +78,8 @@ export default async function DashboardPage() {
       ) : (
         <DashboardBody trades={trades} initialBalance={initialBalance} />
       )}
+
+      <TradeModalGate searchParams={resolvedSearchParams} userId={user.id} />
     </>
   )
 }

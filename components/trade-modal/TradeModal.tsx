@@ -1,0 +1,459 @@
+'use client'
+
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { z } from 'zod'
+import { createTrade, removeTrade, updateTrade } from '@/lib/actions/trades'
+import {
+  DATOS_FIELDS,
+  EDIT_TABS,
+  ESTRATEGIA_FIELDS,
+  RIESGO_FIELDS,
+  STEP_SCHEMAS,
+  WIZARD_STEPS,
+  marketLabel,
+  stepForField,
+} from './steps'
+import { DirectionToggle, FieldGrid, FormField, SectionTitle, type FormState, type TradeFieldName } from './fields'
+
+const MONTH_NAMES_LOWER = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+]
+
+/** '2026-08-03' -> '3 de agosto, 2026'. Devuelve la entrada tal cual si no tiene forma de fecha. */
+function formatLongDate(ymd: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd
+  const [y, m, d] = ymd.split('-').map(Number)
+  return `${d} de ${MONTH_NAMES_LOWER[m - 1]}, ${y}`
+}
+
+/** Trade + relaciones ya convertidas a un objeto plano y serializable para pasar del Gate (server) a este client component. */
+export interface EditableTrade {
+  id: string
+  tradeDate: string
+  asset: string
+  market: string
+  direction: string
+  entryTime: string | null
+  exitTime: string | null
+  entryPrice: number | null
+  exitPrice: number | null
+  contracts: number | null
+  positionSize: number | null
+  stopLoss: number | null
+  takeProfit: number | null
+  riskUsd: number | null
+  riskPct: number | null
+  pnlUsd: number
+  rMultiple: number | null
+  setup: string
+  timeframe: string
+  marketConditions: string | null
+  entryType: string | null
+  confirmations: string | null
+}
+
+const EMPTY_FORM: FormState = {
+  tradeDate: '',
+  asset: '',
+  market: 'indices',
+  direction: 'long',
+  entryTime: '',
+  exitTime: '',
+  entryPrice: '',
+  exitPrice: '',
+  contracts: '',
+  positionSize: '',
+  stopLoss: '',
+  takeProfit: '',
+  riskUsd: '',
+  riskPct: '',
+  pnlUsd: '',
+  rMultiple: '',
+  setup: '',
+  timeframe: '',
+  marketConditions: '',
+  entryType: '',
+  confirmations: '',
+}
+
+function numToStr(v: number | null): string {
+  return v === null ? '' : String(v)
+}
+
+function nullToStr(v: string | null): string {
+  return v ?? ''
+}
+
+function tradeToForm(t: EditableTrade): FormState {
+  return {
+    tradeDate: t.tradeDate,
+    asset: t.asset,
+    market: t.market,
+    direction: t.direction,
+    entryTime: nullToStr(t.entryTime),
+    exitTime: nullToStr(t.exitTime),
+    entryPrice: numToStr(t.entryPrice),
+    exitPrice: numToStr(t.exitPrice),
+    contracts: numToStr(t.contracts),
+    positionSize: numToStr(t.positionSize),
+    stopLoss: numToStr(t.stopLoss),
+    takeProfit: numToStr(t.takeProfit),
+    riskUsd: numToStr(t.riskUsd),
+    riskPct: numToStr(t.riskPct),
+    pnlUsd: String(t.pnlUsd),
+    rMultiple: numToStr(t.rMultiple),
+    setup: t.setup,
+    timeframe: t.timeframe,
+    marketConditions: nullToStr(t.marketConditions),
+    entryType: nullToStr(t.entryType),
+    confirmations: nullToStr(t.confirmations),
+  }
+}
+
+type TradeModalProps = { mode: 'create'; defaultDate: string } | { mode: 'edit'; detail: EditableTrade }
+
+/**
+ * Modal de operación. Crear = wizard de 4 pasos (Datos/Riesgo y resultado/Estrategia/
+ * Bitácora); editar = 2 pestañas (Datos [= Datos+Riesgo+Estrategia apiladas] / Bitácora).
+ * El paso/pestaña "Bitácora" es un placeholder en esta tarea — Task 14 lo reemplaza; no se
+ * envía `journalRaw` a `createTrade` todavía. Ver mockup 408-546.
+ */
+export function TradeModal(props: TradeModalProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
+
+  const detail = props.mode === 'edit' ? props.detail : undefined
+  const isCreate = props.mode === 'create'
+
+  const [form, setForm] = useState<FormState>(() =>
+    props.mode === 'create' ? { ...EMPTY_FORM, tradeDate: props.defaultDate } : tradeToForm(props.detail),
+  )
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
+  const [formError, setFormError] = useState<string | null>(null)
+  const [step, setStep] = useState(0)
+  const [tab, setTab] = useState(0)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Foco inicial en el primer campo del modal.
+  useEffect(() => {
+    contentRef.current?.querySelector<HTMLElement>('input, select, textarea')?.focus()
+  }, [])
+
+  // Escape cierra el modal. `close` se lee vía ref para no reenganchar el listener en cada render.
+  const closeRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') closeRef.current()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  function close() {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('trade')
+    params.delete('nuevo')
+    params.delete('fecha')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+  }
+  // Refs no deben escribirse durante el render — se actualiza en un efecto (corre después
+  // de cada render) para que el listener de Escape del efecto de arriba siempre invoque la
+  // versión más reciente de `close` sin tener que reengancharlo en cada render.
+  useEffect(() => {
+    closeRef.current = close
+  })
+
+  function updateField(name: TradeFieldName, value: string) {
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
+    setForm((prev) => {
+      const next = { ...prev, [name]: value }
+      // Autocálculo suave: si hay riesgo $ y P&L y el R múltiple está vacío, se sugiere
+      // R = pnl / riesgo (editable, no vuelve a sobrescribirse una vez que el campo tiene algo).
+      if ((name === 'riskUsd' || name === 'pnlUsd') && next.rMultiple === '') {
+        const risk = parseFloat(next.riskUsd)
+        const pnl = parseFloat(next.pnlUsd)
+        if (Number.isFinite(risk) && risk !== 0 && Number.isFinite(pnl)) {
+          next.rMultiple = (pnl / risk).toFixed(2)
+        }
+      }
+      return next
+    })
+  }
+
+  function handleContinue() {
+    const schema = STEP_SCHEMAS[step]
+    if (!schema) return
+    const result = schema.safeParse(form)
+    if (!result.success) {
+      setFieldErrors(z.flattenError(result.error).fieldErrors)
+      return
+    }
+    setFieldErrors({})
+    setFormError(null)
+    setStep((s) => Math.min(WIZARD_STEPS.length - 1, s + 1))
+  }
+
+  function handleFinalSubmit() {
+    setFormError(null)
+    startTransition(async () => {
+      const result = detail ? await updateTrade(detail.id, form) : await createTrade(form)
+      if (!result.ok) {
+        const errs = result.fieldErrors
+        if (errs && Object.keys(errs).length > 0) {
+          setFieldErrors(errs)
+          if (isCreate) {
+            setStep(Math.min(...Object.keys(errs).map(stepForField)))
+          } else {
+            setTab(0)
+          }
+        } else {
+          setFormError(result.error)
+        }
+        return
+      }
+      close()
+      router.refresh()
+    })
+  }
+
+  function handleDeleteClick() {
+    if (!detail) return
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    setFormError(null)
+    startTransition(async () => {
+      const result = await removeTrade(detail.id)
+      if (!result.ok) {
+        setConfirmDelete(false)
+        setFormError(result.error)
+        return
+      }
+      close()
+      router.refresh()
+    })
+  }
+
+  const showDatos = isCreate ? step === 0 : tab === 0
+  const showRiesgo = isCreate ? step === 1 : tab === 0
+  const showEstrategia = isCreate ? step === 2 : tab === 0
+  const showBitacora = isCreate ? step === 3 : tab === 1
+
+  const title = !detail ? 'Registrar operación' : form.setup ? `${form.asset} · ${form.setup}` : form.asset
+  const dateLine = !detail
+    ? `Nuevo registro · ${formatLongDate(form.tradeDate)}`
+    : `${formatLongDate(form.tradeDate)} · ${marketLabel(form.market)}${form.timeframe ? ` · ${form.timeframe}` : ''}`
+
+  return (
+    <>
+      <style>{`
+        .trademodal-backdrop {
+          position: fixed; inset: 0; z-index: 60;
+          display: flex; align-items: flex-start; justify-content: center;
+          padding: 44px 20px; overflow: auto;
+          background: color-mix(in oklab, var(--color-neutral-900) 72%, transparent);
+          backdrop-filter: blur(3px);
+        }
+        .trademodal-dialog {
+          width: min(940px, 100%); max-height: calc(100vh - 88px);
+          background: var(--color-neutral-900); border: 1px solid var(--color-neutral-700);
+          border-radius: 14px; box-shadow: var(--shadow-lg);
+          display: flex; flex-direction: column; overflow: hidden;
+          animation: smRise .22s ease both;
+        }
+        .trademodal-content { overflow-y: auto; }
+        @media (max-width: 639px) {
+          .trademodal-backdrop { padding: 0; align-items: stretch; }
+          .trademodal-dialog { width: 100%; height: 100%; max-height: 100%; border-radius: 0; border: 0; }
+        }
+      `}</style>
+
+      <div className="trademodal-backdrop" onClick={close}>
+        <div
+          className="trademodal-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="trademodal-title"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-[14px] border-b border-neutral-800 px-[22px] py-[18px]">
+            <div className="flex min-w-0 flex-col gap-[3px]">
+              <span
+                id="trademodal-title"
+                className="text-[15px]"
+                style={{ fontFamily: 'var(--font-heading)', fontWeight: 'var(--font-heading-weight)' }}
+              >
+                {title}
+              </span>
+              <span className="text-[11.5px] text-neutral-500">{dateLine}</span>
+            </div>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Cerrar"
+              className="btn btn-ghost btn-icon ml-auto"
+              style={{ width: '30px', height: '30px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="flex gap-1 px-[22px] pt-[12px]">
+            {(isCreate ? WIZARD_STEPS : EDIT_TABS).map((label, i) => {
+              const active = isCreate ? step === i : tab === i
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setConfirmDelete(false)
+                    if (isCreate) setStep(i)
+                    else setTab(i)
+                  }}
+                  className="flex items-center gap-[7px] border-0 bg-transparent px-[12px] py-[8px] text-[12px]"
+                  style={{
+                    borderBottom: `2px solid ${active ? 'var(--color-accent)' : 'transparent'}`,
+                    color: active ? 'var(--color-text)' : 'var(--color-neutral-500)',
+                  }}
+                >
+                  {isCreate ? (
+                    <span
+                      className="flex items-center justify-center rounded-full text-[9.5px]"
+                      style={{
+                        width: '17px',
+                        height: '17px',
+                        border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-neutral-700)'}`,
+                        color: active ? 'var(--color-accent-200)' : 'var(--color-neutral-500)',
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                  ) : null}
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+
+          <div ref={contentRef} className="trademodal-content flex flex-col gap-[20px] px-[22px] py-[18px]">
+            {showDatos && (
+              <section className="flex flex-col gap-[12px]">
+                <SectionTitle>Información básica</SectionTitle>
+                <FieldGrid>
+                  {DATOS_FIELDS.map((f) => (
+                    <FormField
+                      key={f.name}
+                      field={f}
+                      value={form[f.name]}
+                      onChange={(v) => updateField(f.name, v)}
+                      errors={fieldErrors[f.name]}
+                    />
+                  ))}
+                  <DirectionToggle value={form.direction} onChange={(v) => updateField('direction', v)} />
+                </FieldGrid>
+              </section>
+            )}
+
+            {showRiesgo && (
+              <section className="flex flex-col gap-[12px]">
+                <SectionTitle>Gestión del riesgo y resultado</SectionTitle>
+                <FieldGrid>
+                  {RIESGO_FIELDS.map((f) => (
+                    <FormField
+                      key={f.name}
+                      field={f}
+                      value={form[f.name]}
+                      onChange={(v) => updateField(f.name, v)}
+                      errors={fieldErrors[f.name]}
+                    />
+                  ))}
+                </FieldGrid>
+              </section>
+            )}
+
+            {showEstrategia && (
+              <section className="flex flex-col gap-[12px]">
+                <SectionTitle>Información estratégica</SectionTitle>
+                <FieldGrid>
+                  {ESTRATEGIA_FIELDS.map((f) => (
+                    <FormField
+                      key={f.name}
+                      field={f}
+                      value={form[f.name]}
+                      onChange={(v) => updateField(f.name, v)}
+                      errors={fieldErrors[f.name]}
+                    />
+                  ))}
+                </FieldGrid>
+              </section>
+            )}
+
+            {showBitacora && (
+              <section className="flex flex-col gap-[8px]">
+                <SectionTitle>Bitácora de la operación</SectionTitle>
+                <p className="m-0 text-[12px] text-neutral-500">
+                  (Se completa en la siguiente fase de construcción)
+                </p>
+              </section>
+            )}
+
+            {formError && (
+              <p className="text-neg m-0" style={{ fontSize: '12px' }}>
+                {formError}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-[10px] border-t border-neutral-800 px-[22px] py-[14px]">
+            {detail ? (
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                disabled={isPending}
+                className="btn btn-ghost text-[12px]"
+                style={{ color: 'var(--neg)' }}
+              >
+                {confirmDelete ? '¿Seguro? Eliminar definitivamente' : 'Eliminar'}
+              </button>
+            ) : (
+              <span className="text-[11.5px] text-neutral-500">Se guarda al finalizar</span>
+            )}
+
+            <div className="ml-auto flex gap-[8px]">
+              <button type="button" onClick={close} className="btn btn-ghost text-[12px]">
+                Cancelar
+              </button>
+              {isCreate && step < WIZARD_STEPS.length - 1 ? (
+                <button type="button" onClick={handleContinue} className="btn btn-primary text-[12px]" disabled={isPending}>
+                  Continuar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleFinalSubmit}
+                  className="btn btn-primary text-[12px]"
+                  disabled={isPending}
+                >
+                  {isPending ? 'Guardando…' : isCreate ? 'Guardar operación' : 'Guardar cambios'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
