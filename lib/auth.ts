@@ -1,11 +1,11 @@
 import { cache } from 'react'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db'
 import { users, type DbUser } from '@/lib/db/schema'
 
-function isMentorEmail(email: string | undefined | null): boolean {
+export function isMentorEmail(email: string | undefined | null): boolean {
   const configured = process.env.MENTOR_EMAIL
   return !!configured && !!email && configured.trim().toLowerCase() === email.trim().toLowerCase()
 }
@@ -18,11 +18,15 @@ export const requireUser = cache(async (): Promise<DbUser> => {
   const existing = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
 
   const cu = await currentUser()
-  const primaryEmail = cu?.emailAddresses[0]?.emailAddress
+  const primaryEmail = cu?.primaryEmailAddress?.emailAddress
 
   if (existing) {
     if (existing.role === 'student' && isMentorEmail(primaryEmail)) {
-      const [promoted] = await db.update(users).set({ role: 'mentor' }).where(eq(users.id, existing.id)).returning()
+      const [promoted] = await db
+        .update(users)
+        .set({ role: 'mentor' })
+        .where(and(eq(users.id, existing.id), eq(users.role, 'student')))
+        .returning()
       return promoted ?? existing
     }
     return existing
