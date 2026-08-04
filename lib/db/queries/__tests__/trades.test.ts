@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { createTestDb, type TestDb } from '../../__tests__/helpers'
-import { users, trades, tradeJournals } from '../../schema'
+import { users, trades, tradeJournals, tradeCaptures } from '../../schema'
 import {
   listTrades,
   getTradeDetail,
@@ -9,6 +9,7 @@ import {
   updateTradeById,
   upsertJournal,
   deleteTradeById,
+  getCaptureForUser,
 } from '../trades'
 import type { TradeFormValues, JournalFormValues } from '@/lib/validation/trade'
 
@@ -253,5 +254,31 @@ describe('lib/db/queries/trades', () => {
 
     const trasFallo = await listTrades(db, userA.id)
     expect(trasFallo).toHaveLength(0)
+  })
+
+  it('(g) getCaptureForUser(db, A, capturaDeA) devuelve la captura; getCaptureForUser(db, B, capturaDeA) -> null', async () => {
+    const { userA, userB } = await seedUsers(db)
+    const tradeId = await insertTradeWithJournal(db, userA.id, minimalTrade)
+    const [capture] = await db
+      .insert(tradeCaptures)
+      .values({ tradeId, phase: 'before', blobPathname: `captures/${tradeId}/before`, contentType: 'image/png' })
+      .returning()
+
+    const paraA = await getCaptureForUser(db, userA.id, capture.id)
+    expect(paraA).not.toBeNull()
+    expect(paraA?.id).toBe(capture.id)
+    expect(paraA?.blobPathname).toBe(`captures/${tradeId}/before`)
+    expect(paraA?.contentType).toBe('image/png')
+
+    const paraB = await getCaptureForUser(db, userB.id, capture.id)
+    expect(paraB).toBeNull()
+  })
+
+  it('getCaptureForUser(db, A, idInexistente) -> null', async () => {
+    const { userA } = await seedUsers(db)
+    await insertTradeWithJournal(db, userA.id, minimalTrade)
+
+    const inexistente = await getCaptureForUser(db, userA.id, '00000000-0000-0000-0000-000000000000')
+    expect(inexistente).toBeNull()
   })
 })

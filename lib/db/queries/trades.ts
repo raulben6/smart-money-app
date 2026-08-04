@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'
 import * as schema from '@/lib/db/schema'
 import {
@@ -153,6 +153,73 @@ export async function deleteTradeById(db: Db, userId: string, tradeId: string): 
   const result = await db
     .delete(trades)
     .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)))
+    .returning()
+
+  return result.length > 0
+}
+
+/**
+ * Captura de un trade sólo si pertenece al usuario (join con `trades` filtrando
+ * por `userId`, ya que `trade_captures` no tiene columna `userId` propia);
+ * `null` si no existe o no es suya.
+ */
+export async function getCaptureForUser(db: Db, userId: string, captureId: string): Promise<DbCapture | null> {
+  const [row] = await db
+    .select({ capture: tradeCaptures })
+    .from(tradeCaptures)
+    .innerJoin(trades, eq(tradeCaptures.tradeId, trades.id))
+    .where(and(eq(tradeCaptures.id, captureId), eq(trades.userId, userId)))
+
+  return row?.capture ?? null
+}
+
+/**
+ * Crea o actualiza la captura de una fase (`before`/`after`) de un trade del
+ * usuario (upsert manual sobre el índice único `trade_id`+`phase`, ya subido el
+ * archivo a Blob); `null` si el trade no existe o no es del usuario. Devuelve
+ * el id de la fila resultante (nueva o reemplazada).
+ */
+export async function upsertCapture(
+  db: Db,
+  userId: string,
+  tradeId: string,
+  phase: 'before' | 'after',
+  blobPathname: string,
+  contentType: string,
+): Promise<string | null> {
+  const [owned] = await db
+    .select({ id: trades.id })
+    .from(trades)
+    .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)))
+
+  if (!owned) return null
+
+  const [row] = await db
+    .insert(tradeCaptures)
+    .values({ tradeId, phase, blobPathname, contentType })
+    .onConflictDoUpdate({
+      target: [tradeCaptures.tradeId, tradeCaptures.phase],
+      set: { blobPathname, contentType, createdAt: new Date() },
+    })
+    .returning()
+
+  return row.id
+}
+
+/**
+ * Borra la fila de una captura sólo si pertenece a un trade del usuario
+ * (subconsulta contra `trades.userId`, ya que `trade_captures` no tiene
+ * columna `userId` propia); `false` si no existe o no es suya. No borra el
+ * blob en Vercel Blob: eso es responsabilidad de quien llama, antes de borrar
+ * la fila (si el blob se borra pero la fila queda, `getCaptureForUser` seguiría
+ * devolviendo una referencia rota; el orden inverso es más seguro).
+ */
+export async function deleteCaptureById(db: Db, userId: string, captureId: string): Promise<boolean> {
+  const ownedTradeIds = db.select({ id: trades.id }).from(trades).where(eq(trades.userId, userId))
+
+  const result = await db
+    .delete(tradeCaptures)
+    .where(and(eq(tradeCaptures.id, captureId), inArray(tradeCaptures.tradeId, ownedTradeIds)))
     .returning()
 
   return result.length > 0
