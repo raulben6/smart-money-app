@@ -37,10 +37,12 @@ function firstTradeIdByDay(trades: DbTrade[], year: number, month: number): Map<
 
 /**
  * Grid mensual: cabecera Lun-Dom + celdas de día en un único grid de 7
- * columnas (igual que el mockup, líneas 229-242). Cada celda con trades
- * enlaza a `?trade=<id>` (el más antiguo por `createdAt` ese día); sin
- * trades enlaza a `?nuevo=1&fecha=YYYY-MM-DD`. Lógica de tinte/borde por
- * signo replicada del mockup (líneas 668-688).
+ * columnas (igual que el mockup, líneas 229-242). Cada celda con un solo
+ * trade enlaza directo a `?trade=<id>`; con 2+ enlaza a `?dia=YYYY-MM-DD`
+ * (abre `DayTradesPanel`, que lista todas las operaciones de ese día — sin
+ * esto, un día con varios trades solo dejaba llegar al más antiguo por
+ * `createdAt`); sin trades enlaza a `?nuevo=1&fecha=YYYY-MM-DD`. Lógica de
+ * tinte/borde por signo replicada del mockup (líneas 668-688).
  *
  * El hover (borde acento + `translateY(-1px)`) y las variantes de
  * color/tinte se resuelven con clases (`.cal-day*`) en un `<style>` propio
@@ -108,13 +110,18 @@ export function MonthGrid({
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
           const href =
-            has && firstId
-              ? `/calendario?y=${year}&m=${month}&trade=${firstId}`
-              : `/calendario?y=${year}&m=${month}&nuevo=1&fecha=${dateStr}`
+            count > 1
+              ? `/calendario?y=${year}&m=${month}&dia=${dateStr}`
+              : has && firstId
+                ? `/calendario?y=${year}&m=${month}&trade=${firstId}`
+                : `/calendario?y=${year}&m=${month}&nuevo=1&fecha=${dateStr}`
 
-          const ariaLabel = has
-            ? `${day} de ${monthNameLower}, ${signedMoney(pnl)}, ${count} ${tradeWord(count)}`
-            : `${day} de ${monthNameLower}, sin operaciones, registrar`
+          const ariaLabel =
+            count > 1
+              ? `${day} de ${monthNameLower}, ${signedMoney(pnl)}, ${count} ${tradeWord(count)} — ver lista`
+              : has
+                ? `${day} de ${monthNameLower}, ${signedMoney(pnl)}, ${count} ${tradeWord(count)}`
+                : `${day} de ${monthNameLower}, sin operaciones, registrar`
 
           const className = [
             'cal-day',

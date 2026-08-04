@@ -7,7 +7,10 @@ import { MONTH_NAMES_ES } from '@/lib/format'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { MonthSummary } from '@/components/calendar/MonthSummary'
+import { DayTradesPanel } from '@/components/calendar/DayTradesPanel'
 import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
+
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /** Año/mes válidos desde `searchParams` (enteros, año 2000-2100, mes 1-12); si faltan o son inválidos, el mes actual local. */
 function resolveYearMonth(y: string | undefined, m: string | undefined): { year: number; month: number } {
@@ -32,11 +35,11 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
 export default async function CalendarioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ y?: string; m?: string; trade?: string; nuevo?: string; fecha?: string }>
+  searchParams: Promise<{ y?: string; m?: string; trade?: string; nuevo?: string; fecha?: string; dia?: string }>
 }) {
   const user = await requireUser()
   const resolvedSearchParams = await searchParams
-  const { y, m, trade, nuevo, fecha } = resolvedSearchParams
+  const { y, m, trade, nuevo, fecha, dia } = resolvedSearchParams
   const { year, month } = resolveYearMonth(y, m)
 
   const db = getDb()
@@ -47,13 +50,21 @@ export default async function CalendarioPage({
   const next = shiftMonth(year, month, 1)
   const monthLabel = `${MONTH_NAMES_ES[month - 1]} ${year}`
 
+  // `?dia=` abre el panel de lista (DayTradesPanel) en vez del modal de trade — mutuamente
+  // excluyentes con `trade`/`nuevo`: si cualquiera de esos dos está activo, gana el modal
+  // (TradeModalGate ya lo estaba mostrando antes de esta tarea) y el panel no se renderiza,
+  // aunque `dia` también venga en la URL.
+  const diaValida = dia && FECHA_RE.test(dia) ? dia : null
+  const showDayPanel = diaValida !== null && !trade && !nuevo
+  const dayTrades = showDayPanel ? trades.filter((t) => t.tradeDate === diaValida) : []
+
   return (
     <>
       <PageHeader
         title="Calendario de trading"
         subtitle="Haz clic en un día para registrar o revisar tus operaciones"
       >
-        <Link href="/calendario?nuevo=1" className="btn btn-secondary">
+        <Link href={`/calendario?y=${year}&m=${month}&nuevo=1`} className="btn btn-secondary">
           + Registrar trade
         </Link>
       </PageHeader>
@@ -119,6 +130,15 @@ export default async function CalendarioPage({
       </div>
 
       <TradeModalGate searchParams={{ trade, nuevo, fecha }} userId={user.id} />
+
+      {showDayPanel && diaValida !== null ? (
+        <DayTradesPanel
+          dateISO={diaValida}
+          trades={dayTrades}
+          closeHref={`/calendario?y=${year}&m=${month}`}
+          registerHref={`/calendario?y=${year}&m=${month}&nuevo=1&fecha=${diaValida}`}
+        />
+      ) : null}
     </>
   )
 }
