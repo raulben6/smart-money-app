@@ -17,7 +17,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen">
       <Sidebar name={user.name} initials={initialsOf(user.name)} />
-      <main className="flex min-w-0 flex-1 flex-col pb-16 lg:pb-0">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+        {children}
+      </main>
       <BottomNav />
     </div>
   )
