@@ -81,7 +81,10 @@ export async function insertTradeWithJournal(
     .returning()
 
   try {
-    await db.insert(tradeJournals).values({ tradeId: trade.id, ...(journal ?? emptyJournalValues) })
+    // `tradeId` se fija DESPUÉS del spread a propósito: si `journal` llegara con una
+    // clave `tradeId` propia (payload hostil que hoy Zod ya filtra, pero esta función
+    // no debe depender de eso), no debe poder "re-parentar" el journal a otro trade.
+    await db.insert(tradeJournals).values({ ...(journal ?? emptyJournalValues), tradeId: trade.id })
   } catch (err) {
     await db.delete(trades).where(eq(trades.id, trade.id))
     throw err
@@ -90,7 +93,12 @@ export async function insertTradeWithJournal(
   return trade.id
 }
 
-/** Actualiza un trade sólo si pertenece al usuario; `false` si no existe o no es suyo. */
+/**
+ * Actualiza un trade sólo si pertenece al usuario; `false` si no existe o no es suyo.
+ * `userId` e `id` se re-fijan al final del `.set(...)` (después del spread de
+ * `values`) para que una clave `userId`/`id` dentro de `values` nunca pueda
+ * transferir la propiedad del trade ni reescribir su clave primaria.
+ */
 export async function updateTradeById(
   db: Db,
   userId: string,
@@ -99,7 +107,7 @@ export async function updateTradeById(
 ): Promise<boolean> {
   const result = await db
     .update(trades)
-    .set({ ...values, updatedAt: new Date() })
+    .set({ ...values, updatedAt: new Date(), userId, id: tradeId })
     .where(and(eq(trades.id, tradeId), eq(trades.userId, userId)))
     .returning()
 
@@ -127,12 +135,14 @@ export async function upsertJournal(
   const [existing] = await db.select({ tradeId: tradeJournals.tradeId }).from(tradeJournals).where(eq(tradeJournals.tradeId, tradeId))
 
   if (existing) {
+    // `tradeId` se fija al final: una clave `tradeId` hostil dentro de `journal`
+    // no puede re-parentar la fila (cambiar su PK) hacia otro trade.
     await db
       .update(tradeJournals)
-      .set({ ...journal, updatedAt: new Date() })
+      .set({ ...journal, updatedAt: new Date(), tradeId })
       .where(eq(tradeJournals.tradeId, tradeId))
   } else {
-    await db.insert(tradeJournals).values({ tradeId, ...journal })
+    await db.insert(tradeJournals).values({ ...journal, tradeId })
   }
 
   return true

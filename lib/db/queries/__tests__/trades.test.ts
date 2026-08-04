@@ -182,12 +182,53 @@ describe('lib/db/queries/trades', () => {
     expect(todos).toHaveLength(1)
   })
 
-  it('upsertJournal(db, B, tradeDeA, ...) -> false (no autorizado)', async () => {
+  it('upsertJournal(db, B, tradeDeA, ...) -> false (no autorizado) y el journal de A queda intacto', async () => {
+    const { userA, userB } = await seedUsers(db)
+    const tradeId = await insertTradeWithJournal(db, userA.id, minimalTrade, minimalJournal)
+
+    const ok = await upsertJournal(db, userB.id, tradeId, { ...minimalJournal, whyTook: 'Intento de B' })
+    expect(ok).toBe(false)
+
+    const [journal] = await db.select().from(tradeJournals).where(eq(tradeJournals.tradeId, tradeId))
+    expect(journal.whyTook).toBe('Ruptura de rango')
+  })
+
+  it('upsertJournal ignora una clave hostil `tradeId` dentro del payload de journal (no permite re-parentar la fila a otro trade)', async () => {
+    const { userA } = await seedUsers(db)
+    const tradeId1 = await insertTradeWithJournal(db, userA.id, { ...minimalTrade, asset: 'T1' }, minimalJournal)
+    const tradeId2 = await insertTradeWithJournal(db, userA.id, { ...minimalTrade, asset: 'T2' })
+    // tradeId2 es un trade real de A (satisface la FK trade_journals.trade_id -> trades.id)
+    // pero le borramos su journal para que su PK quede libre y así distinguir con
+    // claridad si el journal de T1 termina "reparentado" hacia T2.
+    await db.delete(tradeJournals).where(eq(tradeJournals.tradeId, tradeId2))
+
+    const hostilePayload = { ...minimalJournal, whyTook: 'Hostil', tradeId: tradeId2 } as JournalFormValues & {
+      tradeId: string
+    }
+    const ok = await upsertJournal(db, userA.id, tradeId1, hostilePayload)
+    expect(ok).toBe(true)
+
+    const [journalT1] = await db.select().from(tradeJournals).where(eq(tradeJournals.tradeId, tradeId1))
+    expect(journalT1).toBeDefined()
+    expect(journalT1.whyTook).toBe('Hostil')
+
+    const [journalT2] = await db.select().from(tradeJournals).where(eq(tradeJournals.tradeId, tradeId2))
+    expect(journalT2).toBeUndefined()
+  })
+
+  it('updateTradeById ignora una clave hostil `userId` dentro del payload (no permite transferir la propiedad del trade)', async () => {
     const { userA, userB } = await seedUsers(db)
     const tradeId = await insertTradeWithJournal(db, userA.id, minimalTrade)
 
-    const ok = await upsertJournal(db, userB.id, tradeId, minimalJournal)
-    expect(ok).toBe(false)
+    const hostilePayload = { ...minimalTrade, asset: 'HACKED', userId: userB.id } as TradeFormValues & {
+      userId: string
+    }
+    const ok = await updateTradeById(db, userA.id, tradeId, hostilePayload)
+    expect(ok).toBe(true)
+
+    const [actualizado] = await db.select().from(trades).where(eq(trades.id, tradeId))
+    expect(actualizado.asset).toBe('HACKED')
+    expect(actualizado.userId).toBe(userA.id)
   })
 
   it('insertTradeWithJournal: si falla el insert del journal, borra el trade insertado y relanza', async () => {
