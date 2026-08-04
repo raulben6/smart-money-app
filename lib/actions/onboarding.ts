@@ -1,4 +1,5 @@
 'use server'
+import '@/lib/validation/zod-config'
 import { redirect } from 'next/navigation'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -8,7 +9,10 @@ import { users } from '@/lib/db/schema'
 import type { ActionResult } from './types'
 
 const schema = z.object({
-  initialBalance: z.coerce.number().positive('Debe ser un monto positivo').max(100_000_000),
+  initialBalance: z.coerce
+    .number()
+    .positive('Debe ser un monto positivo')
+    .max(100_000_000, 'El monto no puede superar $100,000,000'),
 })
 
 export async function completeOnboarding(formData: FormData): Promise<ActionResult<null>> {
