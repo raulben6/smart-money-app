@@ -41,6 +41,27 @@ function optionalNumber(build: (n: z.ZodNumber) => z.ZodNumber = (n) => n) {
   return nullableOn(build(z.coerce.number()))
 }
 
+/**
+ * Numérico requerido: a diferencia de `optionalNumber`, aquí "sin dato" no es un valor
+ * válido (no existe `null`). '' / solo espacios / ausente / null añaden un issue custom
+ * con `requiredMessage` en español y cortan el pipeline (`ctx.addIssue` + `z.NEVER`, ver
+ * `handlePipeResult` en zod: si el paso de preprocesamiento deja issues, no se ejecuta el
+ * schema numérico interno, evitando un segundo issue duplicado de "NaN"). `0` explícito y
+ * negativos son valores legítimos (p.ej. breakeven o pérdida) y pasan. Strings no numéricos
+ * (p.ej. 'abc') siguen fallando con el mensaje por defecto del locale global, ya que no se
+ * consideran "vacíos" y sí llegan a `z.coerce.number()`.
+ */
+function requiredNumber(requiredMessage: string) {
+  return z.preprocess((val, ctx) => {
+    const isEmpty = val === undefined || val === null || (typeof val === 'string' && val.trim() === '')
+    if (isEmpty) {
+      ctx.addIssue(requiredMessage)
+      return z.NEVER
+    }
+    return val
+  }, z.coerce.number())
+}
+
 /** Hora HH:mm (24h) opcional; ausente/'' -> null. */
 function optionalTime() {
   return nullableOn(z.string().regex(TIME_RE, 'Hora inválida, use el formato HH:mm'))
@@ -68,7 +89,7 @@ export const tradeSchema = z.object({
   riskPct: optionalNumber((n) =>
     n.min(0, 'Debe ser mayor o igual a 0').max(100, 'Debe ser menor o igual a 100'),
   ),
-  pnlUsd: z.coerce.number(),
+  pnlUsd: requiredNumber('El P&L es obligatorio'),
   rMultiple: optionalNumber(),
   setup: z.string().max(120, 'Máximo 120 caracteres').default(''),
   timeframe: z.string().max(20, 'Máximo 20 caracteres').default(''),

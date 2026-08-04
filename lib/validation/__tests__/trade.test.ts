@@ -109,6 +109,42 @@ describe('tradeSchema', () => {
     expect(Number.isNaN(result.data.entryPrice)).toBe(false)
   })
 
+  it('pnlUsd vacío (\'\') falla en vez de coercionar a 0 (campo requerido)', () => {
+    const result = tradeSchema.safeParse({ ...minimalTrade, pnlUsd: '' })
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.issues.find((i) => i.path[0] === 'pnlUsd')?.message).toBe('El P&L es obligatorio')
+  })
+
+  it('pnlUsd de solo espacios falla', () => {
+    const result = tradeSchema.safeParse({ ...minimalTrade, pnlUsd: '   ' })
+    expect(result.success).toBe(false)
+  })
+
+  it('pnlUsd ausente falla', () => {
+    const { tradeDate, asset, market, direction } = minimalTrade
+    const result = tradeSchema.safeParse({ tradeDate, asset, market, direction })
+    expect(result.success).toBe(false)
+  })
+
+  it('pnlUsd: 0 (breakeven explícito) pasa', () => {
+    const result = tradeSchema.safeParse({ ...minimalTrade, pnlUsd: 0 })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.pnlUsd).toBe(0)
+  })
+
+  it("pnlUsd: '0' (string del form) pasa y se coerciona a número 0", () => {
+    const result = tradeSchema.safeParse({ ...minimalTrade, pnlUsd: '0' })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.pnlUsd).toBe(0)
+  })
+
+  it('pnlUsd negativo pasa (pérdida válida)', () => {
+    const result = tradeSchema.safeParse({ ...minimalTrade, pnlUsd: -310 })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.pnlUsd).toBe(-310)
+  })
+
   it('entryTime/exitTime con formato inválido falla', () => {
     const result = tradeSchema.safeParse({ ...minimalTrade, entryTime: '9:5' })
     expect(result.success).toBe(false)
