@@ -91,7 +91,7 @@ function DashboardBody({
   const windowTrades = trades.filter((t) => t.tradeDate >= windowStart)
   const equitySource = windowTrades.length > 0 ? windowTrades : trades
   const priorTrades = windowTrades.length > 0 ? trades.filter((t) => t.tradeDate < windowStart) : []
-  const equityBaseline = initialBalance + priorTrades.reduce((acc, t) => acc + t.pnlUsd, 0)
+  const equityBaseline = computeSummary(priorTrades, initialBalance).balance
 
   const points = equityPoints(equitySource, equityBaseline)
   const { line, area } = buildLinePath(points.map((p) => p.balance), 720, 220)

@@ -7,7 +7,12 @@ export function WinRateDonut({ winRate, wins, losses }: { winRate: number | null
 
   return (
     <div className="flex items-center gap-4">
-      <svg viewBox="0 0 100 100" style={{ width: '96px', height: '96px', flex: 'none', transform: 'rotate(-90deg)' }}>
+      <svg
+        viewBox="0 0 100 100"
+        role="img"
+        aria-label={`Win Rate ${rounded} por ciento`}
+        style={{ width: '96px', height: '96px', flex: 'none', transform: 'rotate(-90deg)' }}
+      >
         <circle cx={50} cy={50} r={42} fill="none" stroke="var(--color-neutral-800)" strokeWidth={9} />
         <circle
           cx={50}

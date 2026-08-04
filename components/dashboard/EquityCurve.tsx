@@ -30,7 +30,13 @@ export function EquityCurve({
         </span>
       </div>
 
-      <svg viewBox="0 0 720 220" preserveAspectRatio="none" style={{ width: '100%', height: '220px', display: 'block' }}>
+      <svg
+        viewBox="0 0 720 220"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Curva de crecimiento de los últimos 30 días, resultado ${signedMoney(periodNet)}`}
+        style={{ width: '100%', height: '220px', display: 'block' }}
+      >
         <defs>
           <linearGradient id="sm-dashboard-equity" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.28} />

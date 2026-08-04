@@ -25,7 +25,7 @@ export function HeroStats({ summary, initialBalance }: { summary: Summary; initi
     },
     {
       label: 'Expectancy',
-      value: summary.expectancy === null ? '—' : `$${summary.expectancy.toFixed(0)} / trade`,
+      value: summary.expectancy === null ? '—' : `${money(summary.expectancy)} / trade`,
       sub: `${summary.total} operaciones este mes`,
     },
   ]

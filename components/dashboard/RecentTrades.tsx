@@ -19,11 +19,11 @@ export function RecentTrades({ trades }: { trades: DbTrade[] }) {
         <table className="table" style={{ width: '100%', fontSize: '12px' }}>
           <thead>
             <tr>
-              <th className="text-left">Activo</th>
-              <th className="text-left">Dir.</th>
-              <th className="text-left">Setup</th>
-              <th className="text-right">R</th>
-              <th className="text-right">P&amp;L</th>
+              <th scope="col" className="text-left">Activo</th>
+              <th scope="col" className="text-left">Dir.</th>
+              <th scope="col" className="text-left">Setup</th>
+              <th scope="col" className="text-right">R</th>
+              <th scope="col" className="text-right">P&amp;L</th>
             </tr>
           </thead>
           <tbody>
