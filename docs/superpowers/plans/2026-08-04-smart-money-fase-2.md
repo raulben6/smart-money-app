@@ -54,7 +54,7 @@ export const requireUser = cache(async (): Promise<DbUser> => {
   const existing = await db.query.users.findFirst({ where: eq(users.clerkId, clerkId) })
 
   const cu = await currentUser()
-  const primaryEmail = cu?.emailAddresses[0]?.emailAddress
+  const primaryEmail = cu?.primaryEmailAddress?.emailAddress
 
   if (existing) {
     if (existing.role === 'student' && isMentorEmail(primaryEmail)) {
