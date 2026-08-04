@@ -4,7 +4,7 @@ import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, us
 import { saveJournal } from '@/lib/actions/trades'
 import { uploadCapture, deleteCapture } from '@/lib/actions/captures'
 import { journalSchema, type JournalFormValues } from '@/lib/validation/trade'
-import { shouldClearStash } from '@/lib/journal-stash'
+import { shouldClearStash, ownsStash } from '@/lib/journal-stash'
 import { EmotionPicker, type EmotionsValue } from './EmotionPicker'
 import { CaptureSlot } from './CaptureSlot'
 
@@ -277,14 +277,52 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
     }
   }
 
-  /** Borra el stash de recuperación de este trade, si lo hay — ignora fallos de `localStorage`
-   * (modo privado, cuota, etc.): nunca debe interrumpir el flujo normal de guardado/cierre. */
+  /**
+   * Borra el stash de recuperación de este trade — SOLO si esta sesión es su dueña
+   * legítima (ver `ownsStash`, `lib/journal-stash.ts`): lee lo que hay ACTUALMENTE en la
+   * clave y compara su `baseUpdatedAt` contra el `journalUpdatedAt` con el que esta sesión
+   * montó. Un stash HUÉRFANO — el que deja la carrera del hallazgo Crítico 1, con un
+   * `baseUpdatedAt` que ya no coincide con el `journalUpdatedAt` actual — NO se toca aquí:
+   * sin este chequeo, un guardado exitoso ORDINARIO cualquiera de esta sesión reabierta
+   * (`shouldClearStash` -> `clearStash()`) borraría de rebote un huérfano que esta sesión
+   * nunca escribió ni confirmó (hallazgo Importante de la ronda 2 del review).
+   *
+   * Excepción documentada: un stash corrupto o con forma inválida NO pasa por esta función
+   * — se borra sin condiciones desde el efecto de montaje (`removeStashUnconditionally`),
+   * porque es basura irrecuperable sin importar de quién sea.
+   *
+   * Nunca lanza: cualquier fallo al leer/parsear lo que hay actualmente en la clave se trata
+   * como "no se puede confirmar dueño" y por lo tanto NO borra — más seguro asumir que NO es
+   * suyo que arriesgarse a destruir un huérfano ajeno por un error de lectura transitorio.
+   * Ignora también fallos de escritura de `localStorage` (modo privado, cuota, etc.): nunca
+   * debe interrumpir el flujo normal de guardado/cierre.
+   */
   function clearStash() {
     if (!isEdit) return
+    const key = stashKey(tradeId as string)
     try {
-      localStorage.removeItem(stashKey(tradeId as string))
+      const raw = localStorage.getItem(key)
+      if (!raw) return
+      const existing = JSON.parse(raw) as Partial<JournalStash>
+      const stashBaseUpdatedAt = typeof existing.baseUpdatedAt === 'string' ? existing.baseUpdatedAt : null
+      if (!ownsStash({ stashBaseUpdatedAt, sessionBaseUpdatedAt: journalUpdatedAt ?? null })) return
+      localStorage.removeItem(key)
     } catch {
       // ver doc de arriba
+    }
+  }
+
+  /** Borra el stash de recuperación de este trade SIN comprobar dueño — reservado para el
+   * efecto de montaje, que ya tiene en mano un candidato corrupto o con forma inválida
+   * (JSON roto, envoltura sin `savedAt` numérico, o `state` que no pasa `journalSchema`):
+   * ese contenido es basura irrecuperable sin importar de qué sesión venga, así que la
+   * comprobación de dueño de `clearStash` no aplica (y de hecho la haría fallar sin sentido,
+   * ya que ni siquiera se puede leer un `baseUpdatedAt` confiable de algo corrupto). */
+  function removeStashUnconditionally(key: string) {
+    try {
+      localStorage.removeItem(key)
+    } catch {
+      // ver doc de `clearStash`
     }
   }
 
@@ -358,8 +396,10 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
   //
   // Importante #4 del review: un stash con forma inválida (JSON corrupto, envoltura sin
   // `savedAt` numérico, o `state` que no pasa `journalSchema`) no es recuperable de forma
-  // segura — se trata como si no existiera Y se borra (`clearStash()`), a diferencia del
-  // caso "servidor avanzó" de abajo, que NO se borra.
+  // segura — se trata como si no existiera Y se borra sin condiciones
+  // (`removeStashUnconditionally`, no `clearStash()`: es basura irrecuperable sin importar
+  // de qué sesión venga, así que la comprobación de dueño no aplica), a diferencia del caso
+  // "servidor avanzó" de abajo, que NO se borra.
   //
   // Importante #3 del review: la decisión de ofrecer restaurar ya NO compara `savedAt`
   // (reloj del CLIENTE, en `stashAndDiscard`) contra `journalUpdatedAt` (reloj del
@@ -388,18 +428,18 @@ export const JournalSection = forwardRef<JournalSectionHandle, JournalSectionPro
     try {
       candidate = JSON.parse(raw)
     } catch {
-      clearStash()
+      removeStashUnconditionally(key)
       return
     }
 
     const wrapper = candidate as Partial<Record<keyof JournalStash, unknown>> | null
     if (typeof wrapper !== 'object' || wrapper === null || typeof wrapper.savedAt !== 'number') {
-      clearStash()
+      removeStashUnconditionally(key)
       return
     }
     const parsedState = journalSchema.safeParse(wrapper.state)
     if (!parsedState.success) {
-      clearStash()
+      removeStashUnconditionally(key)
       return
     }
     const baseUpdatedAt = typeof wrapper.baseUpdatedAt === 'string' ? wrapper.baseUpdatedAt : null
