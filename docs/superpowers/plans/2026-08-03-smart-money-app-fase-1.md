@@ -543,7 +543,7 @@ git add -A; git commit -m "feat: autenticacion Clerk por invitacion, sync de usu
   - `monthlyAggregates(trades: TradePoint[], months: { year: number; month: number }[]): { label: string; net: number }[]` con labels `['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']`.
   - `lib/format.ts`: `money(n: number): string` (`$1,595`, negativos `-$180`), `signedMoney(n)` (`+$420` / `-$180`), `pct(n, digits?)`.
 
-- [ ] **Step 1: Escribir los tests de `computeSummary`** — casos: (a) lista vacía → `total: 0`, ratios `null`, `balance === initialBalance`; (b) mezcla ganadoras/perdedoras (usar los 13 trades del mockup, líneas 563-577 de `_design/smart-money-app.dc.html`: net = +2145, winRate = 62% redondeando en UI, profitFactor = grossProfit/grossLoss); (c) solo ganadoras → `profitFactor: null` (sin pérdidas) y `avgLoss: null`; (d) solo perdedoras → `winRate: 0`, `avgWin: null`.
+- [ ] **Step 1: Escribir los tests de `computeSummary`** — casos: (a) lista vacía → `total: 0`, ratios `null`, `balance === initialBalance`; (b) mezcla ganadoras/perdedoras (usar los 13 trades del mockup, líneas 563-577 de `_design/smart-money-app.dc.html`: grossProfit = 3040, grossLoss = 1045, net = +1995, winRate = 8/13 ≈ 61.5% → 62% redondeando en UI, profitFactor = 3040/1045); (c) solo ganadoras → `profitFactor: null` (sin pérdidas) y `avgLoss: null`; (d) solo perdedoras → `winRate: 0`, `avgWin: null`.
 
 - [ ] **Step 2: `npx vitest run` → FAIL** (módulo no existe).
 
