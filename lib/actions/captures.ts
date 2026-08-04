@@ -78,7 +78,8 @@ export async function uploadCapture(
     }
 
     return { ok: true, data: { captureId } }
-  } catch {
+  } catch (err) {
+    console.error('[uploadCapture]', err)
     return { ok: false, error: ERROR_INESPERADO }
   }
 }
@@ -106,7 +107,8 @@ export async function deleteCapture(captureId: string): Promise<ActionResult<nul
     await deleteCaptureById(db, user.id, captureId)
 
     return { ok: true, data: null }
-  } catch {
+  } catch (err) {
+    console.error('[deleteCapture]', err)
     return { ok: false, error: ERROR_INESPERADO }
   }
 }

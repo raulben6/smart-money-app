@@ -15,18 +15,39 @@ const securityHeaders = [
 // `next build`/`next start`), que es lo correcto: la cabecera queda fija
 // según cómo se compiló, igual que en `next dev`.
 //
-// Dominios de Clerk verificados contra la publishable key del proyecto
-// (`.env.local`): `pk_test_...` decodifica a
-// `complete-beetle-26.clerk.accounts.dev`, la instancia dev provista por el
-// Marketplace de Vercel — confirma el comodín `https://*.clerk.accounts.dev`.
-// No se encontró referencia a `clerk.services` en la documentación vendida
-// en `.claude/skills/clerk-*`, así que no se añade (ver informe de Task 15).
-// Si en producción se configura un dominio propio de Clerk, esta lista debe
-// actualizarse (a re-verificar en el smoke test de Task 16).
+// El frontend-API host de Clerk depende de la instancia (dev vs. producción)
+// y no es fijo: se deriva en build time desde `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+// (la parte después de `pk_test_`/`pk_live_` es base64 del host, con un `$`
+// final a recortar). Si la env var no está disponible en build, se cae al
+// comodín dev (`*.clerk.accounts.dev`). Se incluyen SIEMPRE ambos comodines
+// (`clerk.accounts.dev` y `clerk.services`) además del host derivado, para no
+// romper si Clerk usa subrecursos de otro subdominio.
+// Importante: al pasar Clerk a una instancia de producción (dominio propio),
+// hay que REDEPLOYAR para que este host derivado se actualice — next.config.ts
+// se evalúa en build time, no en cada request.
+function deriveClerkFrontendApiHost(): string | null {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const match = key?.match(/^pk_(?:test|live)_(.+)$/);
+  if (!match) return null;
+  try {
+    const host = Buffer.from(match[1], "base64").toString("utf8").replace(/\$$/, "");
+    return host || null;
+  } catch {
+    return null;
+  }
+}
+
+const clerkFrontendApiHost = deriveClerkFrontendApiHost();
+const clerkHosts = [
+  ...(clerkFrontendApiHost ? [`https://${clerkFrontendApiHost}`] : []),
+  "https://*.clerk.accounts.dev",
+  "https://*.clerk.services",
+].join(" ");
+
 const cspDirectives = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://challenges.cloudflare.com",
-  "connect-src 'self' https://*.clerk.accounts.dev",
+  `script-src 'self' 'unsafe-inline' ${clerkHosts} https://challenges.cloudflare.com`,
+  `connect-src 'self' ${clerkHosts}`,
   "img-src 'self' blob: data: https://img.clerk.com",
   "style-src 'self' 'unsafe-inline'",
   "frame-src https://challenges.cloudflare.com",

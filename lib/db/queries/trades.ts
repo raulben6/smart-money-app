@@ -86,7 +86,14 @@ export async function insertTradeWithJournal(
     // no debe depender de eso), no debe poder "re-parentar" el journal a otro trade.
     await db.insert(tradeJournals).values({ ...(journal ?? emptyJournalValues), tradeId: trade.id })
   } catch (err) {
-    await db.delete(trades).where(eq(trades.id, trade.id))
+    // La compensación se aísla en su propio try/catch: si el delete de
+    // compensación fallara, no debe enmascarar el error original del insert
+    // del journal (esa es la causa raíz que se relanza abajo).
+    try {
+      await db.delete(trades).where(eq(trades.id, trade.id))
+    } catch (compensationErr) {
+      console.error('[insertTradeWithJournal] compensación falló al borrar el trade', trade.id, compensationErr)
+    }
     throw err
   }
 

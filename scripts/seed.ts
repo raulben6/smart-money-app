@@ -39,6 +39,11 @@ function toYmd(y: number, m: number, d: number): string {
 }
 
 async function main() {
+  if (process.env.ALLOW_SEED !== '1') {
+    console.error('Seed bloqueado: define ALLOW_SEED=1 para ejecutarlo (solo en desarrollo).')
+    process.exit(1)
+  }
+
   const db = getDb()
 
   const [user] = await db.select().from(users).orderBy(asc(users.createdAt)).limit(1)

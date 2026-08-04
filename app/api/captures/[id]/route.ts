@@ -32,7 +32,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return noEncontrada()
   }
 
-  const blob = await get(capture.blobPathname, { access: 'private' })
+  // `useCache: false`: los uploads reemplazan el mismo pathname (`allowOverwrite`
+  // en `uploadCapture`), y el cache de la CDN de `get()` (activo por defecto)
+  // podía seguir sirviendo los bytes viejos tras un reemplazo.
+  const blob = await get(capture.blobPathname, { access: 'private', useCache: false })
   if (!blob || !blob.stream) {
     return noEncontrada()
   }

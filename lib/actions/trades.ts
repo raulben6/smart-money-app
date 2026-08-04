@@ -2,11 +2,12 @@
 import '@/lib/validation/zod-config'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { del } from '@vercel/blob'
 import { requireUser } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import { tradeSchema, journalSchema } from '@/lib/validation/trade'
 import { isValidUuid } from '@/lib/validation/uuid'
-import { insertTradeWithJournal, updateTradeById, upsertJournal, deleteTradeById } from '@/lib/db/queries/trades'
+import { insertTradeWithJournal, updateTradeById, upsertJournal, deleteTradeById, getTradeDetail } from '@/lib/db/queries/trades'
 import type { ActionResult } from './types'
 
 const CAMPOS_INVALIDOS = 'Revisa los campos marcados'
@@ -37,7 +38,8 @@ export async function createTrade(raw: unknown, journalRaw?: unknown): Promise<A
     const id = await insertTradeWithJournal(db, user.id, parsedTrade.data, parsedJournal?.data)
     revalidateTradeViews()
     return { ok: true, data: { id } }
-  } catch {
+  } catch (err) {
+    console.error('[createTrade]', err)
     return { ok: false, error: ERROR_INESPERADO }
   }
 }
@@ -67,7 +69,8 @@ export async function updateTrade(tradeId: string, raw: unknown): Promise<Action
     }
     revalidateTradeViews()
     return { ok: true, data: null }
-  } catch {
+  } catch (err) {
+    console.error('[updateTrade]', err)
     return { ok: false, error: ERROR_INESPERADO }
   }
 }
@@ -93,7 +96,8 @@ export async function saveJournal(tradeId: string, raw: unknown): Promise<Action
     }
     revalidateTradeViews()
     return { ok: true, data: null }
-  } catch {
+  } catch (err) {
+    console.error('[saveJournal]', err)
     return { ok: false, error: ERROR_INESPERADO }
   }
 }
@@ -108,13 +112,28 @@ export async function removeTrade(tradeId: string): Promise<ActionResult<null>> 
 
   try {
     const db = getDb()
+    // Pathnames de las capturas del trade ANTES de borrar la fila: una vez
+    // borrado el trade (cascade), `getTradeDetail` ya no encontraría nada.
+    const detail = await getTradeDetail(db, user.id, tradeId)
     const ok = await deleteTradeById(db, user.id, tradeId)
     if (!ok) {
       return { ok: false, error: SIN_PERMISO }
     }
+
+    if (detail && detail.captures.length > 0) {
+      // Best-effort: si Blob falla, el trade ya se borró y no debe fallar la
+      // acción por unos blobs huérfanos (se registran para limpieza manual).
+      try {
+        await del(detail.captures.map((c) => c.blobPathname))
+      } catch (err) {
+        console.error('[removeTrade] blob del', err)
+      }
+    }
+
     revalidateTradeViews()
     return { ok: true, data: null }
-  } catch {
+  } catch (err) {
+    console.error('[removeTrade]', err)
     return { ok: false, error: ERROR_INESPERADO }
   }
 }
