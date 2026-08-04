@@ -140,6 +140,43 @@ export function TradeModal(props: TradeModalProps) {
 
   const contentRef = useRef<HTMLDivElement>(null)
 
+  // true en cuanto el usuario escribe algo directamente en R múltiple; se resetea si lo
+  // vuelve a dejar vacío. Mientras sea false, el autocálculo de `updateField` puede seguir
+  // recalculando la sugerencia en cada tecleo de riesgo $/P&L (ver finding 1 del review).
+  const rTouchedRef = useRef(false)
+
+  // Guardas contra doble click físico en "Eliminar" (finding 2 del review): el segundo click
+  // de un dblclick puede caer ya con `confirmDelete=true` y disparar el borrado sin que el
+  // usuario realmente haya decidido confirmar. `armedAtRef` ignora clicks demasiado cercanos
+  // al armado; `disarmTimerRef` desarma automáticamente pasados unos segundos si no se confirma.
+  const armedAtRef = useRef(0)
+  const disarmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const DELETE_IGNORE_MS = 400
+  const DELETE_AUTO_DISARM_MS = 4000
+
+  function disarmDelete() {
+    setConfirmDelete(false)
+    if (disarmTimerRef.current) {
+      clearTimeout(disarmTimerRef.current)
+      disarmTimerRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (disarmTimerRef.current) clearTimeout(disarmTimerRef.current)
+    }
+  }, [])
+
+  // Bloquea el scroll del body mientras el modal está abierto (se restaura al desmontar).
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [])
+
   // Foco inicial en el primer campo del modal.
   useEffect(() => {
     contentRef.current?.querySelector<HTMLElement>('input, select, textarea')?.focus()
@@ -177,11 +214,20 @@ export function TradeModal(props: TradeModalProps) {
       delete next[name]
       return next
     })
+
+    // El usuario está escribiendo directamente en R múltiple: a partir de ahora es "suyo" y
+    // el autocálculo de abajo deja de tocarlo — hasta que lo vuelva a dejar vacío.
+    if (name === 'rMultiple') {
+      rTouchedRef.current = value !== ''
+    }
+
     setForm((prev) => {
       const next = { ...prev, [name]: value }
-      // Autocálculo suave: si hay riesgo $ y P&L y el R múltiple está vacío, se sugiere
-      // R = pnl / riesgo (editable, no vuelve a sobrescribirse una vez que el campo tiene algo).
-      if ((name === 'riskUsd' || name === 'pnlUsd') && next.rMultiple === '') {
+      // Autocálculo suave: mientras el usuario no haya tocado R múltiple (rTouchedRef), cada
+      // cambio en riesgo $ o P&L recalcula la sugerencia R = pnl / riesgo — no solo la primera
+      // vez. Antes el gate era "next.rMultiple === ''", que se volvía falso en el primer
+      // dígito sugerido y dejaba pegado ese primer valor a medio calcular (ver finding 1).
+      if ((name === 'riskUsd' || name === 'pnlUsd') && !rTouchedRef.current) {
         const risk = parseFloat(next.riskUsd)
         const pnl = parseFloat(next.pnlUsd)
         if (Number.isFinite(risk) && risk !== 0 && Number.isFinite(pnl)) {
@@ -193,6 +239,7 @@ export function TradeModal(props: TradeModalProps) {
   }
 
   function handleContinue() {
+    setFormError(null)
     const schema = STEP_SCHEMAS[step]
     if (!schema) return
     const result = schema.safeParse(form)
@@ -201,7 +248,6 @@ export function TradeModal(props: TradeModalProps) {
       return
     }
     setFieldErrors({})
-    setFormError(null)
     setStep((s) => Math.min(WIZARD_STEPS.length - 1, s + 1))
   }
 
@@ -230,9 +276,23 @@ export function TradeModal(props: TradeModalProps) {
 
   function handleDeleteClick() {
     if (!detail) return
+
     if (!confirmDelete) {
       setConfirmDelete(true)
+      armedAtRef.current = Date.now()
+      if (disarmTimerRef.current) clearTimeout(disarmTimerRef.current)
+      disarmTimerRef.current = setTimeout(disarmDelete, DELETE_AUTO_DISARM_MS)
       return
+    }
+
+    // Ya armado: si este click llega demasiado pronto después de armar (el segundo click de
+    // un dblclick físico sobre el mismo botón), se ignora — evita un borrado disparado sin
+    // que el usuario haya tenido tiempo real de decidir confirmar (finding 2 del review).
+    if (Date.now() - armedAtRef.current < DELETE_IGNORE_MS) return
+
+    if (disarmTimerRef.current) {
+      clearTimeout(disarmTimerRef.current)
+      disarmTimerRef.current = null
     }
     setFormError(null)
     startTransition(async () => {
@@ -319,7 +379,7 @@ export function TradeModal(props: TradeModalProps) {
                   key={label}
                   type="button"
                   onClick={() => {
-                    setConfirmDelete(false)
+                    disarmDelete()
                     if (isCreate) setStep(i)
                     else setTab(i)
                   }}
@@ -411,7 +471,7 @@ export function TradeModal(props: TradeModalProps) {
             )}
 
             {formError && (
-              <p className="text-neg m-0" style={{ fontSize: '12px' }}>
+              <p role="alert" className="text-neg m-0" style={{ fontSize: '12px' }}>
                 {formError}
               </p>
             )}

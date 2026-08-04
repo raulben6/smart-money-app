@@ -61,12 +61,16 @@ export async function TradeModalGate({
       confirmations: t.confirmations,
     }
 
-    return <TradeModal mode="edit" detail={plain} />
+    // `key` fuerza a React a desmontar/remontar el modal (y por tanto resetear todo su
+    // estado interno — form, paso/pestaña activa, errores) en una transición
+    // `?trade=A` -> `?trade=B` en el historial; sin esto, React reconciliaría el mismo
+    // `TradeModal` y dejaría el form de A pegado al abrir B.
+    return <TradeModal key={plain.id} mode="edit" detail={plain} />
   }
 
   if (searchParams.nuevo) {
     const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayLocal()
-    return <TradeModal mode="create" defaultDate={fecha} />
+    return <TradeModal key="create" mode="create" defaultDate={fecha} />
   }
 
   return null
