@@ -312,8 +312,8 @@ function ManualUnlockRow({ level, studentId, granted }: { level: DbLevel; studen
           type="button"
           onClick={handleRevokeClick}
           disabled={isPending}
-          className="btn btn-ghost"
-          style={{ fontSize: '11px', color: 'var(--neg)' }}
+          className="btn btn-ghost text-neg"
+          style={{ fontSize: '11px' }}
         >
           {confirmRevoke ? '¿Seguro? Revocar' : 'Revocar'}
         </button>

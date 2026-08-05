@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db'
 import { listTrades } from '@/lib/db/queries/trades'
 import { listLevels, listGrantIdsForUser } from '@/lib/db/queries/levels'
 import { computeLevelStatus } from '@/lib/metrics/levels'
+import { computeSummary } from '@/lib/metrics/summary'
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
 
@@ -16,6 +17,15 @@ import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
  * página lo hace — la del mentor no pasa `levelBanner` en absoluto (`CalendarView` ya
  * condiciona el banner a `!readOnly`, pero evitar el cálculo aquí también evita el trabajo
  * innecesario de niveles/grants cuando el viewer es el mentor).
+ *
+ * `levelBanner` incluye `netPnl` (vía `computeSummary`, la misma función que
+ * `computeLevelStatus` usa internamente) ADEMÁS del `status` — hallazgo de revisión: el
+ * banner necesita el `netPnl` REAL para su línea 'Te faltan $X...', no uno reconstruido
+ * desde `progressPct` (que está topado en [0, 100] y por tanto no distingue "voy en $0" de
+ * "voy en -$500"). Sí, esto recalcula `computeSummary` una segunda vez (la primera es
+ * interna a `computeLevelStatus`) — recomputar sobre el mismo array de trades ya en
+ * memoria es más simple y barato que cambiar la firma de `computeLevelStatus` para que
+ * devuelva el summary, y `lib/metrics/*` no se toca en esta tarea.
  */
 export default async function CalendarioPage({
   searchParams,
@@ -33,7 +43,9 @@ export default async function CalendarioPage({
     listGrantIdsForUser(db, user.id),
   ])
 
-  const levelBanner = computeLevelStatus({ trades, initialBalance: user.initialBalance ?? 0, levels, grantedLevelIds })
+  const initialBalance = user.initialBalance ?? 0
+  const status = computeLevelStatus({ trades, initialBalance, levels, grantedLevelIds })
+  const netPnl = computeSummary(trades, initialBalance).netPnl
 
   return (
     <>
@@ -44,7 +56,7 @@ export default async function CalendarioPage({
         searchParams={{ trade, nuevo, fecha, dia }}
         readOnly={false}
         basePath="/calendario"
-        levelBanner={levelBanner}
+        levelBanner={{ status, netPnl }}
       />
 
       <TradeModalGate searchParams={{ trade, nuevo, fecha }} viewer={{ mode: 'owner' }} />

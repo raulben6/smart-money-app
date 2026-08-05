@@ -9,9 +9,17 @@ import type { LevelDef, LevelStatus } from '@/lib/metrics/levels'
  * el texto aquí a partir de los campos crudos del nivel). Exportada para que
  * `CalendarView` (banner del calendario del estudiante, Task 15) reutilice la MISMA
  * redacción sin duplicarla.
+ *
+ * `opts.compact` (Task 15, hallazgo de revisión "Bundle A"): el banner del calendario usa
+ * la variante corta — solo 'generar {money}', mockup línea 200 — porque ese espacio ya
+ * lista los gates que faltan por separado (línea 'Te faltan...'); repetir TODOS los gates
+ * ahí sería redundante. `/mi-nivel` (`LevelProgressCard`, sin `opts`) sigue usando la
+ * variante verbosa completa, mockup línea 315.
  */
-export function levelGoalText(level: LevelDef): string {
+export function levelGoalText(level: LevelDef, opts: { compact?: boolean } = {}): string {
   const base = `generar ${money(level.goalAmount)}`
+  if (opts.compact) return base
+
   const gates: string[] = []
   if (level.minProfitFactor !== null) gates.push(`Profit Factor sostenido sobre ${level.minProfitFactor.toFixed(2)}`)
   if (level.minTrades !== null) gates.push(`al menos ${level.minTrades} operaciones`)

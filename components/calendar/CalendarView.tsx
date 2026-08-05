@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { DbTrade } from '@/lib/db/schema'
 import { calendarAggregates } from '@/lib/metrics/periods'
-import { MONTH_NAMES_ES, money } from '@/lib/format'
+import { MONTH_NAMES_ES, money, pct } from '@/lib/format'
 import type { LevelStatus } from '@/lib/metrics/levels'
 import { levelGoalText } from '@/components/levels/LevelProgressCard'
 import { PageHeader } from '@/components/shell/PageHeader'
@@ -33,21 +33,41 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
 }
 
 /**
+ * Datos del banner de nivel (Task 15): el `LevelStatus` ya calculado + `netPnl` real del
+ * estudiante. `netPnl` viaja SEPARADO de `status` (en vez de derivarse de
+ * `status.progressPct`, ver hallazgo de revisión abajo) porque `progressPct` está topado
+ * en [0, 100] — reconstruir el monto que falta a partir de ese % topado entiende un
+ * `netPnl` negativo como 0 y subestima drásticamente cuánto falta. `lib/metrics/levels.ts`
+ * no se toca (no expone `netPnl` en `LevelStatus`): el caller (`app/(app)/calendario/page.tsx`)
+ * ya tiene los trades y calcula `computeSummary(...).netPnl` por su cuenta.
+ */
+type LevelBannerData = { status: LevelStatus; netPnl: number }
+
+/**
  * Banner de nivel sobre el calendario del ESTUDIANTE (mockup líneas 194-215): badge del
  * nivel EN CURSO (`status.next` — siempre 'en_curso' según `computeLevelStatus`), su
- * 'Objetivo del nivel: ...' (misma redacción que `LevelProgressCard`, vía
- * `levelGoalText`), barra de progreso y 'Te faltan {money} y N operaciones para pasar al
- * Nivel X' — derivado de los propios `requirements` del nivel en curso (nunca de
- * `Summary` crudo, que esta vista no recibe): el monto que falta se reconstruye desde
- * `progressPct` (`goalAmount * (1 - pct/100)`, exacto salvo que `progressPct` ya esté
- * topado en 100 porque la meta de dinero se cumplió pero otro gate no), y las
- * operaciones que faltan se leen del requisito 'Operaciones mínimas' con forma
- * 'X / Y' cuando no está `met`.
+ * 'Objetivo del nivel: ...' en variante COMPACTA ('generar {money}', sin los demás gates —
+ * esos ya se listan aparte en la línea 'Te faltan...'; la variante verbosa completa queda
+ * para `LevelProgressCard`/`/mi-nivel`), barra de progreso y 'Te faltan {money}, N
+ * operaciones, un Profit Factor sobre Y y/o reducir tu drawdown bajo Z% para pasar al
+ * Nivel X' — SOLO se mencionan los gates que de verdad faltan, derivados de los propios
+ * `requirements` del nivel en curso (`focus.requirements`, por label):
+ *
+ * - Dinero: `Math.max(0, next.goalAmount - netPnl)` con el `netPnl` REAL (nunca
+ *   reconstruido desde `progressPct`, ver `LevelBannerData` arriba) — correcto también con
+ *   `netPnl` negativo (p. ej. -$500 contra una meta de $1,000 → faltan $1,500).
+ * - Operaciones: se lee el requisito 'Operaciones mínimas' con forma 'X / Y' cuando no
+ *   está `met` (esa comparación no está topada como `progressPct`, así que parsearla sigue
+ *   siendo exacta).
+ * - Profit Factor / Drawdown / Desbloqueo del mentor: si el requisito correspondiente
+ *   ('Profit Factor mínimo' / 'Drawdown máximo' / 'Desbloqueo del mentor') no está `met`,
+ *   se añade su propia cláusula — antes se omitían por completo y el alumno solo veía el
+ *   fallback genérico aunque el único gate pendiente fuera, p. ej., el Profit Factor.
  *
  * Si el alumno ya completó el último nivel (`status.next === null`), se muestra un
  * banner simple de felicitación en su lugar.
  */
-function LevelBanner({ status }: { status: LevelStatus }) {
+function LevelBanner({ status, netPnl }: LevelBannerData) {
   const next = status.next
 
   if (!next) {
@@ -67,8 +87,7 @@ function LevelBanner({ status }: { status: LevelStatus }) {
   if (!focus) return null
 
   const displayPct = Math.round(status.progressPct)
-  const progressAmount = Math.round((next.goalAmount * displayPct) / 100)
-  const missingMoney = Math.max(0, next.goalAmount - progressAmount)
+  const missingMoney = Math.max(0, next.goalAmount - netPnl)
 
   const tradesReq = focus.requirements.find((r) => r.label === 'Operaciones mínimas')
   const tradesMatch = tradesReq && !tradesReq.met ? tradesReq.value.match(/^(\d+) \/ (\d+)$/) : null
@@ -77,6 +96,21 @@ function LevelBanner({ status }: { status: LevelStatus }) {
   const missingParts: string[] = []
   if (missingMoney > 0) missingParts.push(money(missingMoney))
   if (missingTrades > 0) missingParts.push(`${missingTrades} ${missingTrades === 1 ? 'operación' : 'operaciones'}`)
+
+  const pfReq = focus.requirements.find((r) => r.label === 'Profit Factor mínimo')
+  if (pfReq && !pfReq.met && next.minProfitFactor !== null) {
+    missingParts.push(`un Profit Factor sobre ${next.minProfitFactor.toFixed(2)}`)
+  }
+
+  const ddReq = focus.requirements.find((r) => r.label === 'Drawdown máximo')
+  if (ddReq && !ddReq.met && next.maxDrawdownPct !== null) {
+    missingParts.push(`reducir tu drawdown bajo ${pct(next.maxDrawdownPct)}`)
+  }
+
+  const manualReq = focus.requirements.find((r) => r.label === 'Desbloqueo del mentor')
+  if (manualReq && !manualReq.met) {
+    missingParts.push('el desbloqueo manual del mentor')
+  }
 
   const nextAfter = status.perLevel.find((p) => p.level.position === next.position + 1)?.level ?? null
 
@@ -101,14 +135,16 @@ function LevelBanner({ status }: { status: LevelStatus }) {
           <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13.5px' }}>
             Nivel {next.position} · {next.name}
           </span>
-          <span className="text-[11.5px] text-neutral-400">Objetivo del nivel: {levelGoalText(next)}</span>
+          <span className="text-[11.5px] text-neutral-400">
+            Objetivo del nivel: {levelGoalText(next, { compact: true })}
+          </span>
         </div>
       </div>
 
       <div className="flex flex-1 flex-col gap-[7px]" style={{ minWidth: '220px' }}>
         <div className="flex text-[11.5px] text-neutral-500 tabular-nums">
           <span>
-            {money(progressAmount)} de {money(next.goalAmount)}
+            {money(netPnl)} de {money(next.goalAmount)}
           </span>
           <span className="ml-auto text-neutral-300">{displayPct}%</span>
         </div>
@@ -157,10 +193,10 @@ function LevelBanner({ status }: { status: LevelStatus }) {
  * `?nuevo=`, mes anterior/siguiente) para que funcionen igual bajo `/calendario` (alumno)
  * que bajo `/estudiantes/[id]/calendario` (mentor). `headerActions` es el hueco donde la
  * página mentor monta `StudentPicker` (Task 12) — `undefined` en las páginas de alumno, sin
- * efecto visual. `levelBanner` (Task 15) es el `LevelStatus` del ESTUDIANTE, calculado por
- * `app/(app)/calendario/page.tsx` — las páginas del mentor nunca lo pasan, así que el banner
- * de nivel solo puede aparecer combinado con `!readOnly` (el mentor jamás lo ve, ni siquiera
- * si algún día se le pasara por error).
+ * efecto visual. `levelBanner` (Task 15) es `{ status, netPnl }` del ESTUDIANTE (ver
+ * `LevelBannerData`), calculado por `app/(app)/calendario/page.tsx` — las páginas del
+ * mentor nunca lo pasan, así que el banner de nivel solo puede aparecer combinado con
+ * `!readOnly` (el mentor jamás lo ve, ni siquiera si algún día se le pasara por error).
  */
 export function CalendarView({
   trades,
@@ -179,7 +215,7 @@ export function CalendarView({
   readOnly: boolean
   basePath: string
   headerActions?: ReactNode
-  levelBanner?: LevelStatus
+  levelBanner?: LevelBannerData
 }) {
   const { trade, nuevo, dia } = searchParams
   const { year, month } = resolveYearMonth(y, m)
@@ -213,7 +249,7 @@ export function CalendarView({
       </PageHeader>
 
       <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
-        {!readOnly && levelBanner ? <LevelBanner status={levelBanner} /> : null}
+        {!readOnly && levelBanner ? <LevelBanner status={levelBanner.status} netPnl={levelBanner.netPnl} /> : null}
 
         <div className="flex flex-wrap items-center gap-[14px]">
           <div className="flex items-center gap-[8px]">
