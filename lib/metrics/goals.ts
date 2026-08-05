@@ -96,7 +96,7 @@ export function computeGoalProgress(
       break
   }
 
-  const pct = goal.targetValue > 0 ? Math.min(100, (current / goal.targetValue) * 100) : current >= goal.targetValue ? 100 : 0
+  const pct = goal.targetValue > 0 ? Math.min(100, Math.max(0, (current / goal.targetValue) * 100)) : current >= goal.targetValue ? 100 : 0
 
   let status: 'cumplido' | 'en_curso' | 'en_riesgo' | 'vencido'
   if (pct >= 100) {

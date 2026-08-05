@@ -116,10 +116,14 @@ describe('computeLevelStatus', () => {
     expect(pfReq?.value).toBe('∞ / 5.00')
   })
 
-  it('(c3) PF null sin trades NO cumple (no hay ganancias que sostengan el infinito)', () => {
+  it('(c3) PF null sin trades NO cumple (no hay ganancias que sostengan el infinito); progressPct con next.goalAmount 0 no produce NaN/Infinity', () => {
     const level: LevelDef = { id: 'x', position: 1, name: 'X', goalAmount: 0, minProfitFactor: 5, minTrades: null, maxDrawdownPct: null, manualUnlock: false }
     const status = computeLevelStatus({ trades: [], initialBalance: 10000, levels: [level], grantedLevelIds: [] })
     expect(status.current).toBeNull()
+    expect(status.next?.id).toBe('x')
+    // next.goalAmount es 0: se evita la división por cero tratando la meta
+    // trivial como ya alcanzada (100), en vez de NaN/Infinity.
+    expect(status.progressPct).toBe(100)
   })
 
   it('(d) manualUnlock sin grant retiene el nivel; con grant lo completa', () => {

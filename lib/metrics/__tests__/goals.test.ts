@@ -157,4 +157,63 @@ describe('computeGoalProgress', () => {
     const result = computeGoalProgress(goal, trades, '2026-01-06')
     expect(result.current).toBe(2)
   })
+
+  it('(ganancia) ventana en pérdida: pct se limita a 0, nunca negativo — netPnl -500 sobre target 1000, hoy 21 días antes del vencimiento (en_curso)', () => {
+    const goal: GoalDef = { kind: 'ganancia', targetValue: 1000, thresholdValue: null, manualProgress: null, startDate: '2026-01-01', dueDate: '2026-01-31' }
+    const trades: GoalTradePoint[] = [
+      { tradeDate: '2026-01-05', pnlUsd: 200, riskPct: null },
+      { tradeDate: '2026-01-06', pnlUsd: -700, riskPct: null },
+    ] // netPnl -500 dentro de la ventana
+    // daysBetween('2026-01-10', '2026-01-31') = 21 días -> no entra en la
+    // ventana de en_riesgo (<=7) aunque pct(0) < 50; tampoco vencido
+    // (today <= dueDate) ni cumplido (pct < 100) -> en_curso.
+    const result = computeGoalProgress(goal, trades, '2026-01-10')
+    expect(result.current).toBe(-500)
+    expect(result.pct).toBe(0) // sin el clamp inferior esto daría -50 (bug corregido)
+    expect(result.status).toBe('en_curso')
+  })
+
+  it('boundary (a): pct exactamente 50 con daysToDue <= 7 -> en_curso (en_riesgo exige pct < 50 estricto)', () => {
+    const goal: GoalDef = { kind: 'ganancia', targetValue: 1000, thresholdValue: null, manualProgress: null, startDate: '2026-01-01', dueDate: '2026-01-20' }
+    const trades: GoalTradePoint[] = [{ tradeDate: '2026-01-05', pnlUsd: 500, riskPct: null }] // current 500 -> pct 50
+    // daysBetween('2026-01-13', '2026-01-20') = 7
+    const result = computeGoalProgress(goal, trades, '2026-01-13')
+    expect(result.pct).toBe(50)
+    expect(result.status).toBe('en_curso')
+  })
+
+  it('boundary (b): pct 40 con daysToDue exactamente 7 -> en_riesgo', () => {
+    const goal: GoalDef = { kind: 'ganancia', targetValue: 1000, thresholdValue: null, manualProgress: null, startDate: '2026-01-01', dueDate: '2026-01-20' }
+    const trades: GoalTradePoint[] = [{ tradeDate: '2026-01-05', pnlUsd: 400, riskPct: null }] // current 400 -> pct 40
+    // daysBetween('2026-01-13', '2026-01-20') = 7
+    const result = computeGoalProgress(goal, trades, '2026-01-13')
+    expect(result.pct).toBe(40)
+    expect(result.status).toBe('en_riesgo')
+  })
+
+  it('boundary (c): pct 40 con daysToDue exactamente 8 -> en_curso (ya no cumple daysToDue <= 7)', () => {
+    const goal: GoalDef = { kind: 'ganancia', targetValue: 1000, thresholdValue: null, manualProgress: null, startDate: '2026-01-01', dueDate: '2026-01-20' }
+    const trades: GoalTradePoint[] = [{ tradeDate: '2026-01-05', pnlUsd: 400, riskPct: null }] // current 400 -> pct 40
+    // daysBetween('2026-01-12', '2026-01-20') = 8
+    const result = computeGoalProgress(goal, trades, '2026-01-12')
+    expect(result.pct).toBe(40)
+    expect(result.status).toBe('en_curso')
+  })
+
+  it('targetValue <= 0: se evita la división por cero — cumplida (100) si current >= targetValue, documentado', () => {
+    // Semántica elegida: una meta con targetValue <= 0 se considera trivialmente
+    // alcanzada en cuanto current >= targetValue (0 >= 0 ya es cierto sin
+    // ningún progreso real), evitando el NaN/Infinity de dividir por 0.
+    const zeroTargetNoProgress: GoalDef = { kind: 'manual', targetValue: 0, thresholdValue: null, manualProgress: 0, startDate: '2026-01-01', dueDate: '2026-12-31' }
+    const noProgress = computeGoalProgress(zeroTargetNoProgress, [], '2026-06-01')
+    expect(noProgress.current).toBe(0)
+    expect(noProgress.pct).toBe(100)
+    expect(noProgress.status).toBe('cumplido')
+
+    const zeroTargetWithProgress: GoalDef = { kind: 'manual', targetValue: 0, thresholdValue: null, manualProgress: 50, startDate: '2026-01-01', dueDate: '2026-12-31' }
+    const withProgress = computeGoalProgress(zeroTargetWithProgress, [], '2026-06-01')
+    expect(withProgress.current).toBe(50)
+    expect(withProgress.pct).toBe(100)
+    expect(withProgress.status).toBe('cumplido')
+  })
 })
