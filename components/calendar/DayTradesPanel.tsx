@@ -13,17 +13,23 @@ import { formatLongDate, signedMoney } from '@/lib/format'
  *
  * `year`/`month` para los enlaces de fila se derivan de `dateISO` (que siempre cae dentro
  * del mes visible que generó este panel), evitando pasar `y`/`m` como props redundantes.
+ * `basePath` prefija esos enlaces de fila ('/calendario' para el alumno,
+ * '/estudiantes/[id]/calendario' para el mentor, Task 12). `registerHref` es opcional: la
+ * vista mentor (`readOnly`) lo omite por completo para ocultar '+ Registrar en este día' —
+ * un mentor no registra operaciones a nombre de su alumno.
  */
 export function DayTradesPanel({
   dateISO,
   trades,
   closeHref,
   registerHref,
+  basePath,
 }: {
   dateISO: string
   trades: DbTrade[]
   closeHref: string
-  registerHref: string
+  registerHref?: string
+  basePath: string
 }) {
   const [year, month] = dateISO.split('-').map(Number)
   const netPnl = trades.reduce((sum, t) => sum + t.pnlUsd, 0)
@@ -69,7 +75,7 @@ export function DayTradesPanel({
             const dirBorder = `color-mix(in oklab, ${dirColor} 45%, transparent)`
 
             return (
-              <Link key={t.id} href={`/calendario?y=${year}&m=${month}&trade=${t.id}`} className="daytrades-row">
+              <Link key={t.id} href={`${basePath}?y=${year}&m=${month}&trade=${t.id}`} className="daytrades-row">
                 <span className="tabular-nums" style={{ fontWeight: 600, minWidth: '60px' }}>
                   {t.asset}
                 </span>
@@ -94,9 +100,11 @@ export function DayTradesPanel({
         </div>
 
         <div className="dialog-actions">
-          <Link href={registerHref} className="btn btn-secondary">
-            + Registrar en este día
-          </Link>
+          {registerHref ? (
+            <Link href={registerHref} className="btn btn-secondary">
+              + Registrar en este día
+            </Link>
+          ) : null}
           <Link href={closeHref} className="btn btn-ghost">
             Cerrar
           </Link>

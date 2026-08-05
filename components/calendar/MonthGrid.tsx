@@ -41,8 +41,13 @@ function firstTradeIdByDay(trades: DbTrade[], year: number, month: number): Map<
  * trade enlaza directo a `?trade=<id>`; con 2+ enlaza a `?dia=YYYY-MM-DD`
  * (abre `DayTradesPanel`, que lista todas las operaciones de ese día — sin
  * esto, un día con varios trades solo dejaba llegar al más antiguo por
- * `createdAt`); sin trades enlaza a `?nuevo=1&fecha=YYYY-MM-DD`. Lógica de
- * tinte/borde por signo replicada del mockup (líneas 668-688).
+ * `createdAt`); sin trades enlaza a `?nuevo=1&fecha=YYYY-MM-DD` — salvo en
+ * modo `readOnly` (mentor, Task 12), donde una celda sin operaciones se
+ * renderiza como un `<div>` no interactivo en vez de un `<Link>` (un mentor
+ * no puede registrar operaciones a nombre de su alumno). `basePath` prefija
+ * todos los enlaces ('/calendario' para el alumno, '/estudiantes/[id]/calendario'
+ * para el mentor). Lógica de tinte/borde por signo replicada del mockup
+ * (líneas 668-688).
  *
  * El hover (borde acento + `translateY(-1px)`) y las variantes de
  * color/tinte se resuelven con clases (`.cal-day*`) en un `<style>` propio
@@ -57,11 +62,15 @@ export function MonthGrid({
   month,
   days,
   trades,
+  basePath,
+  readOnly,
 }: {
   year: number
   month: number
   days: Map<number, DayAggregate>
   trades: DbTrade[]
+  basePath: string
+  readOnly: boolean
 }) {
   const firstIds = firstTradeIdByDay(trades, year, month)
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -86,6 +95,7 @@ export function MonthGrid({
           border-color: color-mix(in oklab, var(--neg) 40%, transparent);
           background: color-mix(in oklab, var(--neg) 12%, transparent);
         }
+        .cal-day-static:hover { border-color: var(--color-neutral-800); transform: none; }
       `}</style>
 
       <div className="grid grid-cols-7 gap-[7px]">
@@ -109,12 +119,34 @@ export function MonthGrid({
           const firstId = firstIds.get(day)
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
+          const className = [
+            'cal-day',
+            !has && readOnly ? 'cal-day-static' : '',
+            'min-h-[52px]',
+            'sm:min-h-[92px]',
+            has ? (positive ? 'cal-day-pos' : 'cal-day-neg') : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+
+          const daySpan = <span className="text-[11.5px] text-neutral-400 tabular-nums">{day}</span>
+
+          // Sin operaciones y modo mentor (readOnly): celda no interactiva, sin `?nuevo=` —
+          // un mentor no registra operaciones a nombre de su alumno.
+          if (!has && readOnly) {
+            return (
+              <div key={day} className={className}>
+                {daySpan}
+              </div>
+            )
+          }
+
           const href =
             count > 1
-              ? `/calendario?y=${year}&m=${month}&dia=${dateStr}`
+              ? `${basePath}?y=${year}&m=${month}&dia=${dateStr}`
               : has && firstId
-                ? `/calendario?y=${year}&m=${month}&trade=${firstId}`
-                : `/calendario?y=${year}&m=${month}&nuevo=1&fecha=${dateStr}`
+                ? `${basePath}?y=${year}&m=${month}&trade=${firstId}`
+                : `${basePath}?y=${year}&m=${month}&nuevo=1&fecha=${dateStr}`
 
           const ariaLabel =
             count > 1
@@ -123,18 +155,9 @@ export function MonthGrid({
                 ? `${day} de ${monthNameLower}, ${signedMoney(pnl)}, ${count} ${tradeWord(count)}`
                 : `${day} de ${monthNameLower}, sin operaciones, registrar`
 
-          const className = [
-            'cal-day',
-            'min-h-[52px]',
-            'sm:min-h-[92px]',
-            has ? (positive ? 'cal-day-pos' : 'cal-day-neg') : '',
-          ]
-            .filter(Boolean)
-            .join(' ')
-
           return (
             <Link key={day} href={href} aria-label={ariaLabel} className={className}>
-              <span className="text-[11.5px] text-neutral-400 tabular-nums">{day}</span>
+              {daySpan}
               {has ? (
                 <>
                   <span
