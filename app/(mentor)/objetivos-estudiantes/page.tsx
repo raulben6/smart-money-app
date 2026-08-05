@@ -129,7 +129,12 @@ export default async function ObjetivosEstudiantesPage({
       {editableGoal ? (
         <GoalForm key={editableGoal.id} mode="edit" goal={editableGoal} />
       ) : nuevo ? (
-        <GoalForm mode="create" studentId={studentId} />
+        // `key={studentId}`: si `studentId` cambia mientras `?nuevo=1` sigue en la URL (p.
+        // ej. navegación de historial), fuerza a React a desmontar/remontar el form en vez
+        // de reconciliar el mismo `GoalForm` y dejar su estado (`form`/`fieldErrors`)
+        // pegado contra el alumno anterior — mismo criterio que `TradeModalGate` usa con
+        // `key={plain.id}` al pasar de un `?trade=A` a `?trade=B`.
+        <GoalForm key={studentId} mode="create" studentId={studentId} />
       ) : null}
     </>
   )

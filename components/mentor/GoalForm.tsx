@@ -129,6 +129,7 @@ export function GoalForm(props: GoalFormProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   // Guardas contra doble click físico en "Eliminar" — mismo patrón que `TradeModal`
   // (ver su doc): el segundo click de un dblclick puede caer ya con `confirmDelete=true`
@@ -172,14 +173,68 @@ export function GoalForm(props: GoalFormProps) {
     router.replace(qs ? `${pathname}?${qs}` : pathname)
   }
 
+  // Escape cierra el modal. El mismo listener implementa el focus trap del diálogo:
+  // Tab/Shift+Tab en los bordes de la lista de focusables cicla al otro extremo en vez de
+  // escapar hacia la página de debajo (que sigue en el DOM detrás del backdrop) — sin esto,
+  // un usuario de teclado podría tabular fuera del modal hacia elementos interactivos de la
+  // página oculta tras `role="dialog" aria-modal="true"`, que exige contención de foco.
+  // Mismo patrón EXACTO que `TradeModal` (ver su doc): la lista de focusables se recalcula
+  // en cada Tab (no se cachea) para quedar correcta sin importar qué campos estén
+  // mostrados/ocultos en ese momento (p. ej. tras cambiar `kind`).
+  //
+  // `closeRef` deja que este efecto se registre UNA sola vez (deps `[]`) sin quedarse con
+  // una versión obsoleta de `close` — que cambia en cada render porque depende de
+  // `pathname`/`searchParams` — siempre invoca la versión más reciente vía la ref,
+  // actualizada en el efecto de abajo (que sí corre en cada render).
+  const closeRef = useRef<() => void>(() => {})
   useEffect(() => {
+    closeRef.current = close
+  })
+
+  useEffect(() => {
+    function getFocusables(dialog: HTMLElement): HTMLElement[] {
+      const candidates = dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      // `offsetParent === null` descarta lo oculto por `display:none`/no-renderizado (p. ej.
+      // los campos condicionales por `kind` que no están montados) — un elemento así no es
+      // alcanzable con Tab en un navegador real, así que tampoco debe contar para el ciclo.
+      // También descarta lo deshabilitado, que no puede recibir foco.
+      return Array.from(candidates).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null)
+    }
+
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') close()
+      if (e.key === 'Escape') {
+        closeRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusables = getFocusables(dialog)
+      if (focusables.length === 0) return
+
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+      const activeIndex = active instanceof HTMLElement ? focusables.indexOf(active) : -1
+
+      if (e.shiftKey) {
+        // En el primero (o con el foco fuera del diálogo, `activeIndex === -1`): envuelve al
+        // último en vez de dejar que Shift+Tab se escape hacia atrás de la página.
+        if (activeIndex <= 0) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else if (activeIndex === -1 || activeIndex === focusables.length - 1) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `close` se reconstruye solo cuando cambia la URL, no hace falta re-suscribir en cada render de estado del form
-  }, [pathname, searchParams])
+  }, [])
 
   function updateField<K extends keyof GoalFieldState>(name: K, value: GoalFieldState[K]) {
     setFieldErrors((prev) => {
@@ -208,13 +263,37 @@ export function GoalForm(props: GoalFormProps) {
     return errs && errs.length > 0 ? true : undefined
   }
 
+  /**
+   * `true` si el campo `name` NO se renderiza para `kind` (ver JSX: `targetValue` se oculta
+   * en 'manual'; `thresholdValue` solo se muestra en 'riesgo_diario'; `manualProgress` solo
+   * en 'manual'). Usado por `handleSubmit` para detectar el caso "hay un error de
+   * validación en un campo que el usuario no puede ver" — sin este chequeo, `fieldErrors`
+   * se pondría en un campo invisible y "Guardar" parecería no hacer nada (bundle B del
+   * review de Task 14).
+   */
+  function isFieldHidden(name: keyof GoalFieldState, kind: DbGoal['kind']): boolean {
+    if (name === 'targetValue') return kind === 'manual'
+    if (name === 'thresholdValue') return kind !== 'riesgo_diario'
+    if (name === 'manualProgress') return kind !== 'manual'
+    return false
+  }
+
   function handleSubmit() {
     setFormError(null)
 
     const raw = buildRaw()
     const parsed = goalSchema.safeParse(raw)
     if (!parsed.success) {
-      setFieldErrors(z.flattenError(parsed.error).fieldErrors)
+      const errs = z.flattenError(parsed.error).fieldErrors
+      setFieldErrors(errs)
+      // Ningún error debería caer aquí en la práctica (los campos ocultos por `kind` se
+      // fijan a valores siempre válidos, ver `handleKindChange`/`goalToForm`), pero es un
+      // caso silencioso si algo cambia — mejor un aviso genérico que un "Guardar" que no
+      // hace nada visible.
+      const hasHiddenError = Object.keys(errs).some((key) => isFieldHidden(key as keyof GoalFieldState, form.kind))
+      if (hasHiddenError) {
+        setFormError('Revisa los campos del tipo seleccionado')
+      }
       return
     }
     setFieldErrors({})
@@ -298,6 +377,7 @@ export function GoalForm(props: GoalFormProps) {
 
       <div className="goalform-backdrop" onClick={close}>
         <div
+          ref={dialogRef}
           className="goalform-dialog"
           role="dialog"
           aria-modal="true"
