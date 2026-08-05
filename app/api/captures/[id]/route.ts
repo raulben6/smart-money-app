@@ -20,11 +20,15 @@ function noEncontrada() {
  * segmento de ruta sin garantía de forma (no pasó por Zod ni por un Server
  * Action), así que se valida como UUID antes de tocar la base de datos.
  *
- * Task 12: si quien pide la captura es un mentor, se autoriza vía
+ * Task 12: si quien pide la captura es un mentor, se autoriza primero vía
  * `getCaptureForStudent` (cualquier captura de un trade de un estudiante) — no
  * `getCaptureForUser`, que solo encuentra capturas del propio `user.id` y siempre
- * devolvería 404 para las de un alumno. El resto de roles (estudiante) sigue el
- * flujo de dueño de siempre, sin cambios.
+ * devolvería 404 para las de un alumno. Con fallback al flujo de dueño (`getCaptureForUser`)
+ * si eso no encuentra nada: `role` es promovible en caliente (`isMentorEmail`, `lib/auth.ts`)
+ * y un mentor real de este programa puede ser un estudiante promovido con sus propios trades
+ * de Fase 1 — sin este fallback, esa cuenta perdería acceso a sus propias capturas en cuanto
+ * `role` pasara a 'mentor'. El resto de roles (estudiante no promovido) sigue el flujo de
+ * dueño de siempre, sin cambios.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser()
@@ -35,7 +39,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const db = getDb()
-  const capture = user.role === 'mentor' ? await getCaptureForStudent(db, user.id, id) : await getCaptureForUser(db, user.id, id)
+  const capture =
+    user.role === 'mentor'
+      ? (await getCaptureForStudent(db, user.id, id)) ?? (await getCaptureForUser(db, user.id, id))
+      : await getCaptureForUser(db, user.id, id)
   if (!capture) {
     return noEncontrada()
   }

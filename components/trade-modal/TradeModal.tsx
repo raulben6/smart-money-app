@@ -129,9 +129,11 @@ type TradeModalProps = ({ mode: 'create'; defaultDate: string } | { mode: 'edit'
   /** Modo mentor (Task 12): deshabilita todos los inputs (`<fieldset disabled>`), oculta
    * Guardar/Eliminar/Continuar (el footer solo muestra Cerrar) y la Bitácora se renderiza
    * como texto en vez del formulario editable (ver `ReadOnlyJournal`). En la práctica solo
-   * llega junto con `mode: 'edit'` — `TradeModalGate` nunca abre `mode: 'create'` para un
-   * mentor (`?nuevo` se ignora ahí). */
-  readOnly?: boolean
+   * llega en `true` junto con `mode: 'edit'` — `TradeModalGate` nunca abre `mode: 'create'`
+   * para un mentor (`?nuevo` se ignora ahí), pero SIEMPRE pasa `readOnly` explícitamente en
+   * ambos call sites (obligatorio, no opcional) para que un caller nuevo no pueda olvidarlo
+   * y dejar un modal editable abierto por accidente en un contexto de solo lectura. */
+  readOnly: boolean
 }
 
 /**
@@ -157,7 +159,7 @@ export function TradeModal(props: TradeModalProps) {
   // Solo verdadero junto a `detail` en la práctica (ver doc de `TradeModalProps.readOnly`) —
   // `showReadOnlyJournal` más abajo revalida `detail !== undefined` de todos modos, sin
   // asumir esa invariante desde aquí.
-  const readOnly = props.readOnly ?? false
+  const { readOnly } = props
 
   // Solo tiene sentido en modo editar: llega tras un `createTrade` exitoso cuyas capturas
   // fallaron al subir (ver `handleFinalSubmit`), que redirige aquí mismo con este query
@@ -883,6 +885,15 @@ function ReadOnlyJournal({
   captures: ExistingCapture[]
   hidden: boolean
 }) {
+  // `v` de cache-busting para las imágenes de captura (mismo motivo que `CaptureSlot`, ver su
+  // doc): sin él, el cache del navegador/CDN de `get()` podría servir bytes de una re-subida
+  // anterior bajo la misma URL. Un único valor por montaje (no uno por captura) alcanza aquí:
+  // a diferencia de `CaptureSlot`, esta vista es de solo lectura y nunca sube nada que
+  // necesite invalidar el cache a mitad de sesión. Inicializador perezoso de `useState` (no
+  // `useMemo`, que `react-hooks/purity` marca como impuro incluso memoizado) — mismo patrón
+  // que el `Date.now()` por captura en el inicializador de `captureState` de `JournalSection`.
+  const [v] = useState(() => Date.now())
+
   return (
     <section className="flex flex-col gap-[14px]" style={hidden ? { display: 'none' } : undefined}>
       <div className="flex flex-wrap items-baseline gap-[10px]">
@@ -939,9 +950,13 @@ function ReadOnlyJournal({
             >
               {existing ? (
                 // eslint-disable-next-line @next/next/no-img-element -- captura privada autenticada, no un asset estático de next/image
-                <img src={`/api/captures/${existing.id}`} alt={c.label} className="h-full w-full object-cover" />
+                <img
+                  src={`/api/captures/${existing.id}?v=${v}`}
+                  alt={c.label}
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                <span className="text-[12px] text-neutral-400">Sin captura</span>
+                <span className="text-[12px] text-neutral-400">{c.label} · sin captura</span>
               )}
             </div>
           )

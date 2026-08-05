@@ -115,10 +115,12 @@ export async function TradeModalGate({
 
   // Un mentor nunca crea operaciones a nombre de su alumno: `?nuevo` se ignora por completo
   // en modo mentor, aunque llegue en la URL (defensa en profundidad, no solo ausencia de un
-  // botón en la UI — ver `DashboardView`/`CalendarView`, que ya no renderizan ese enlace).
+  // botón en la UI — ver `DashboardView`/`CalendarView`, que ya no renderizan ese enlace). Este
+  // branch solo se alcanza con `viewer.mode === 'owner'`, así que `readOnly` siempre es `false`
+  // aquí — pero `TradeModal` lo exige explícito (prop obligatoria), no opcional.
   if (viewer.mode === 'owner' && searchParams.nuevo) {
     const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayLocalISO()
-    return <TradeModal key="create" mode="create" defaultDate={fecha} />
+    return <TradeModal key="create" mode="create" defaultDate={fecha} readOnly={false} />
   }
 
   return null

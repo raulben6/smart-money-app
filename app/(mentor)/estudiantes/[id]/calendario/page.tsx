@@ -45,7 +45,15 @@ export default async function StudentCalendarioPage({
         searchParams={{ trade, nuevo, fecha, dia }}
         readOnly
         basePath={basePath}
-        headerActions={<StudentPicker students={students} currentId={id} subroute="calendario" />}
+        headerActions={
+          <StudentPicker
+            // Solo id+nombre — nunca la fila completa (clerkId/role/initialBalance/createdAt no
+            // deben viajar al navegador del mentor en el payload RSC de otros alumnos).
+            students={students.map((s) => ({ id: s.id, name: s.name }))}
+            currentId={id}
+            subroute="calendario"
+          />
+        }
       />
 
       <TradeModalGate searchParams={{ trade, nuevo, fecha }} viewer={{ mode: 'mentor', studentId: id }} />

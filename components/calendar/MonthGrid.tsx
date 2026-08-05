@@ -135,7 +135,7 @@ export function MonthGrid({
           // un mentor no registra operaciones a nombre de su alumno.
           if (!has && readOnly) {
             return (
-              <div key={day} className={className}>
+              <div key={day} className={className} aria-label={`${day} de ${monthNameLower}, sin operaciones`}>
                 {daySpan}
               </div>
             )

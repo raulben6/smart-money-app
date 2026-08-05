@@ -44,7 +44,15 @@ export default async function StudentDashboardPage({
         displayName={student.name}
         readOnly
         basePath={`/estudiantes/${id}/dashboard`}
-        headerActions={<StudentPicker students={students} currentId={id} subroute="dashboard" />}
+        headerActions={
+          <StudentPicker
+            // Solo id+nombre — nunca la fila completa (clerkId/role/initialBalance/createdAt no
+            // deben viajar al navegador del mentor en el payload RSC de otros alumnos).
+            students={students.map((s) => ({ id: s.id, name: s.name }))}
+            currentId={id}
+            subroute="dashboard"
+          />
+        }
       />
 
       <TradeModalGate searchParams={resolvedSearchParams} viewer={{ mode: 'mentor', studentId: id }} />
