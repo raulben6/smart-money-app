@@ -1,9 +1,11 @@
-import { pgTable, pgEnum, uuid, text, date, time, numeric, timestamp, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, uuid, text, date, time, numeric, timestamp, jsonb, uniqueIndex, index, integer, boolean, primaryKey } from 'drizzle-orm/pg-core'
 
 export const roleEnum = pgEnum('role', ['student', 'mentor'])
 export const marketEnum = pgEnum('market', ['indices', 'acciones', 'opciones', 'futuros', 'forex', 'cripto'])
 export const directionEnum = pgEnum('direction', ['long', 'short'])
 export const capturePhaseEnum = pgEnum('capture_phase', ['before', 'after'])
+export const goalKindEnum = pgEnum('goal_kind', ['ganancia', 'operaciones', 'win_rate', 'riesgo_diario', 'manual'])
+export const notificationKindEnum = pgEnum('notification_kind', ['felicitacion', 'correccion', 'recordatorio', 'observacion', 'progreso'])
 
 const money = (name: string) => numeric(name, { precision: 12, scale: 2, mode: 'number' })
 
@@ -67,7 +69,55 @@ export const tradeCaptures = pgTable('trade_captures', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('captures_trade_phase_idx').on(t.tradeId, t.phase)])
 
+export const levels = pgTable('levels', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  position: integer('position').notNull().unique(),
+  name: text('name').notNull(),
+  goalAmount: money('goal_amount').notNull(),
+  minProfitFactor: numeric('min_profit_factor', { precision: 6, scale: 2, mode: 'number' }),
+  minTrades: integer('min_trades'),
+  maxDrawdownPct: numeric('max_drawdown_pct', { precision: 6, scale: 2, mode: 'number' }),
+  manualUnlock: boolean('manual_unlock').notNull().default(false),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const manualLevelGrants = pgTable('manual_level_grants', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  levelId: uuid('level_id').notNull().references(() => levels.id, { onDelete: 'cascade' }),
+  grantedAt: timestamp('granted_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.levelId] })])
+
+export const goals = pgTable('goals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: goalKindEnum('kind').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  targetValue: numeric('target_value', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  thresholdValue: numeric('threshold_value', { precision: 6, scale: 2, mode: 'number' }),
+  manualProgress: numeric('manual_progress', { precision: 5, scale: 1, mode: 'number' }),
+  startDate: date('start_date').notNull(),
+  dueDate: date('due_date').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [index('goals_user_idx').on(t.userId)])
+
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: notificationKindEnum('kind').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  tradeId: uuid('trade_id').references(() => trades.id, { onDelete: 'set null' }),
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [index('notifications_user_read_idx').on(t.userId, t.readAt), index('notifications_user_created_idx').on(t.userId, t.createdAt)])
+
 export type DbUser = typeof users.$inferSelect
 export type DbTrade = typeof trades.$inferSelect
 export type DbJournal = typeof tradeJournals.$inferSelect
 export type DbCapture = typeof tradeCaptures.$inferSelect
+export type DbLevel = typeof levels.$inferSelect
+export type DbLevelGrant = typeof manualLevelGrants.$inferSelect
+export type DbGoal = typeof goals.$inferSelect
+export type DbNotification = typeof notifications.$inferSelect
