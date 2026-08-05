@@ -22,12 +22,31 @@ export type StudentStats = {
   dd: number
   /** Rentabilidad sobre el capital inicial, en %; 0 si el estudiante no tiene `initialBalance` (aún no completó onboarding). */
   ret: number
-  /** Nombre del nivel actual (`computeLevelStatus().current`), o 'Nivel 1' si todavía no completó ninguno. */
+  /**
+   * Nombre a mostrar en el tag de "Nivel" (mockup 358-375): el del nivel ACTUAL
+   * (`computeLevelStatus().current`) si ya completó alguno, o el del nivel que persigue
+   * (`.next`) si todavía no completó ninguno — el caso común. Antes mostraba el literal
+   * hardcodeado `'Nivel 1'` en ese caso, que queda obsoleto en cuanto el mentor renombra un
+   * nivel (`updateLevel`, ver `lib/actions/mentor.ts`); ahora siempre refleja el nombre real
+   * del nivel en la DB. `'—'` solo si no hay NINGÚN nivel definido (`current` y `next`
+   * ambos `null`, caso degenerado sin datos sembrados).
+   */
   levelName: string
   /** Media de `riskPct` sobre los trades que lo tienen definido; `null` si ninguno lo tiene. */
   avgRiskPct: number | null
   /** `tradeDate` más reciente del estudiante ('YYYY-MM-DD'), o `null` si no tiene trades — insumo de "activos esta semana". */
   lastTradeDate: string | null
+  /**
+   * true si el Profit Factor es efectivamente infinito: ninguna pérdida y al menos una
+   * ganancia. Es el MISMO caso en el que `computeSummary` devuelve `profitFactor: null`
+   * (`grossLoss === 0`), pero ahí es el MEJOR resultado posible — no la ausencia de datos,
+   * que también da `profitFactor: null` cuando el estudiante no tiene trades en absoluto.
+   * Sin esta bandera, la UI (CompareBars, RankingTable) no puede distinguir "récord
+   * perfecto" de "sin operar" y mostraría lo mismo ('—') para ambos. Mismo criterio que
+   * `pfGateMet`/`pfDisplay` en `lib/metrics/levels.ts` (no exportados desde ahí — se
+   * mirror aquí en vez de ampliar la superficie pública de ese módulo por esta tarea).
+   */
+  pfInfinite: boolean
 }
 
 /**
@@ -64,14 +83,17 @@ export async function loadStudentStats(db: Db, mentorId: string): Promise<Studen
         null,
       )
 
+      const pfInfinite = summary.grossLoss === 0 && summary.grossProfit > 0
+
       return {
         student,
         summary,
         dd,
         ret,
-        levelName: levelStatus.current?.name ?? 'Nivel 1',
+        levelName: levelStatus.current?.name ?? levelStatus.next?.name ?? '—',
         avgRiskPct,
         lastTradeDate,
+        pfInfinite,
       }
     }),
   )

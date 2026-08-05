@@ -49,7 +49,11 @@ export function RankingTable({ stats }: { stats: StudentStats[] }) {
                     {money(s.summary.balance)}
                   </td>
                   <td className="text-right tabular-nums">{s.summary.winRate === null ? '—' : pct(s.summary.winRate, 0)}</td>
-                  <td className="text-right tabular-nums">{s.summary.profitFactor === null ? '—' : s.summary.profitFactor.toFixed(2)}</td>
+                  <td className="text-right tabular-nums">
+                    {/* PF null es ambiguo: "sin trades" (sin dato) o "récord perfecto, cero
+                        pérdidas" (StudentStats.pfInfinite) — ver mismo comentario en CompareBars. */}
+                    {s.summary.profitFactor !== null ? s.summary.profitFactor.toFixed(2) : s.pfInfinite ? '∞' : '—'}
+                  </td>
                   <td className="text-right tabular-nums" style={{ color: 'var(--neg)' }}>
                     {pct(-s.dd, 1)}
                   </td>

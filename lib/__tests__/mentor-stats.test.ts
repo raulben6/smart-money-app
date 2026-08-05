@@ -73,6 +73,7 @@ function fakeStats(overrides: {
     levelName: 'Nivel 1',
     avgRiskPct: null,
     lastTradeDate: overrides.lastTradeDate ?? null,
+    pfInfinite: false, // irrelevante para computePanelSummary/resolveComparedIds (ningún test de esta sección lo consulta)
   }
 }
 
@@ -203,18 +204,26 @@ describe('loadStudentStats (integración con DB)', () => {
     expect(await loadStudentStats(db, studentA.id)).toEqual([])
   })
 
-  it('compone summary/dd/ret/levelName/avgRiskPct/lastTradeDate correctamente por estudiante', async () => {
+  it('compone summary/dd/ret/levelName/avgRiskPct/lastTradeDate/pfInfinite correctamente por estudiante', async () => {
     const db = await createTestDb()
     const { mentor, studentA, studentB } = await seedMentorAndStudents(db)
+    const [studentC] = await db
+      .insert(users)
+      .values({ clerkId: 'clerk_c', role: 'student', name: 'Estudiante C', initialBalance: 500 })
+      .returning()
 
-    // Renombrar Nivel 1 (sembrado por la migración) para poder distinguir en la
-    // aserción "levelName == nombre REAL del nivel completado" de "levelName ==
-    // el literal 'Nivel 1' que usa el fallback cuando `current` es null" — con el
-    // nombre original ambas ramas producirían el mismo texto por coincidencia.
+    // Renombrar Nivel 1 y Nivel 2 (sembrados por la migración) para poder distinguir, en
+    // las aserciones de abajo, "levelName == nombre REAL del nivel completado" (current)
+    // de "levelName == nombre REAL del nivel que persigue" (next, fix del hallazgo del
+    // reviewer) de "levelName == el literal 'Nivel 1' hardcodeado que el fallback usaba
+    // ANTES del fix" — con los nombres originales, las tres ramas producirían textos
+    // indistinguibles por coincidencia.
     await db.update(levels).set({ name: 'Bronce' }).where(eq(levels.position, 1))
+    await db.update(levels).set({ name: 'Plata' }).where(eq(levels.position, 2))
 
     // 10 trades (minTrades del Nivel 1 = 10) que suman netPnl=800 (>= goalAmount=500):
-    // completa el Nivel 1. wins=7, losses=3 -> profitFactor = 1000/200 = 5, winRate=70%.
+    // completa el Nivel 1 pero NO el Nivel 2 (netPnl=800 < goalAmount=1000 de Plata).
+    // wins=7, losses=3 -> profitFactor = 1000/200 = 5, winRate=70%.
     const pnls = [400, 300, -100, 50, 50, -50, 50, 50, -50, 100]
     const riskPcts: (number | null)[] = [2, 1.5, null, null, null, null, null, null, null, null]
     for (let i = 0; i < pnls.length; i++) {
@@ -226,8 +235,14 @@ describe('loadStudentStats (integración con DB)', () => {
       })
     }
 
+    // Récord perfecto: 3 trades, todos ganadores -> grossLoss=0, grossProfit=450 ->
+    // profitFactor null (misma forma que "sin trades"), pero pfInfinite debe ser true.
+    for (const pnl of [100, 200, 150]) {
+      await insertTradeWithJournal(db, studentC.id, { ...minimalTrade, tradeDate: '2026-07-01', pnlUsd: pnl })
+    }
+
     const stats = await loadStudentStats(db, mentor.id)
-    expect(stats).toHaveLength(2)
+    expect(stats).toHaveLength(3)
 
     const a = stats.find((s) => s.student.id === studentA.id)!
     expect(a.summary.total).toBe(10)
@@ -235,19 +250,30 @@ describe('loadStudentStats (integración con DB)', () => {
     expect(a.summary.winRate).toBe(70)
     expect(a.summary.profitFactor).toBe(5)
     expect(a.ret).toBe(80) // 800 / 1000 * 100
-    expect(a.levelName).toBe('Bronce') // Nivel 1 completado, con su nombre real (no el fallback)
+    expect(a.levelName).toBe('Bronce') // current = Nivel 1 completado (NO 'Plata', que es `next`: current gana sobre next)
     expect(a.avgRiskPct).toBe(1.75) // media de [2, 1.5] — ignora los 8 trades sin riskPct
     expect(a.lastTradeDate).toBe('2026-07-10')
+    expect(a.pfInfinite).toBe(false) // tiene pérdidas -> profitFactor numérico, no infinito
     // Balances: 1000 (inicial) -> 1400 -> 1700 -> 1600 -> 1650 -> 1700 -> 1650 -> 1700 -> 1750 -> 1700 -> 1800.
     // El único pico-a-valle es 1700 -> 1600.
     expect(a.dd).toBeCloseTo((100 / 1700) * 100, 6)
 
     const b = stats.find((s) => s.student.id === studentB.id)!
     expect(b.summary.total).toBe(0)
+    expect(b.summary.profitFactor).toBeNull()
     expect(b.ret).toBe(0)
-    expect(b.levelName).toBe('Nivel 1') // sin trades -> ningún nivel completado -> fallback literal
+    // Sin trades -> current=null -> fallback a next (fix del hallazgo): next = Nivel 1 (el
+    // de menor position) = 'Bronce', NUNCA el literal 'Nivel 1' que el código hardcodeaba
+    // antes del fix (habría quedado obsoleto en cuanto el mentor lo renombró arriba).
+    expect(b.levelName).toBe('Bronce')
     expect(b.avgRiskPct).toBeNull()
     expect(b.lastTradeDate).toBeNull()
     expect(b.dd).toBe(0)
+    expect(b.pfInfinite).toBe(false) // sin trades: PF null es "sin dato", NO "récord perfecto"
+
+    const c = stats.find((s) => s.student.id === studentC.id)!
+    expect(c.summary.total).toBe(3)
+    expect(c.summary.profitFactor).toBeNull() // misma forma que "sin trades" — grossLoss=0
+    expect(c.pfInfinite).toBe(true) // pero SÍ tiene trades, todos ganadores -> PF efectivamente infinito
   })
 })
