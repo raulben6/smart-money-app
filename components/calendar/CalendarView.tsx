@@ -2,7 +2,9 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { DbTrade } from '@/lib/db/schema'
 import { calendarAggregates } from '@/lib/metrics/periods'
-import { MONTH_NAMES_ES } from '@/lib/format'
+import { MONTH_NAMES_ES, money } from '@/lib/format'
+import type { LevelStatus } from '@/lib/metrics/levels'
+import { levelGoalText } from '@/components/levels/LevelProgressCard'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { MonthSummary } from '@/components/calendar/MonthSummary'
@@ -31,6 +33,113 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
 }
 
 /**
+ * Banner de nivel sobre el calendario del ESTUDIANTE (mockup líneas 194-215): badge del
+ * nivel EN CURSO (`status.next` — siempre 'en_curso' según `computeLevelStatus`), su
+ * 'Objetivo del nivel: ...' (misma redacción que `LevelProgressCard`, vía
+ * `levelGoalText`), barra de progreso y 'Te faltan {money} y N operaciones para pasar al
+ * Nivel X' — derivado de los propios `requirements` del nivel en curso (nunca de
+ * `Summary` crudo, que esta vista no recibe): el monto que falta se reconstruye desde
+ * `progressPct` (`goalAmount * (1 - pct/100)`, exacto salvo que `progressPct` ya esté
+ * topado en 100 porque la meta de dinero se cumplió pero otro gate no), y las
+ * operaciones que faltan se leen del requisito 'Operaciones mínimas' con forma
+ * 'X / Y' cuando no está `met`.
+ *
+ * Si el alumno ya completó el último nivel (`status.next === null`), se muestra un
+ * banner simple de felicitación en su lugar.
+ */
+function LevelBanner({ status }: { status: LevelStatus }) {
+  const next = status.next
+
+  if (!next) {
+    return (
+      <div className="card flex flex-wrap items-center gap-[14px]" style={{ padding: '15px 18px' }}>
+        <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13.5px' }}>
+          Completaste todos los niveles del programa
+        </span>
+        <Link href="/mi-nivel" className="btn btn-ghost ml-auto" style={{ fontSize: '11.5px', padding: '6px 11px' }}>
+          Ver mi nivel
+        </Link>
+      </div>
+    )
+  }
+
+  const focus = status.perLevel.find((p) => p.level.id === next.id)
+  if (!focus) return null
+
+  const displayPct = Math.round(status.progressPct)
+  const progressAmount = Math.round((next.goalAmount * displayPct) / 100)
+  const missingMoney = Math.max(0, next.goalAmount - progressAmount)
+
+  const tradesReq = focus.requirements.find((r) => r.label === 'Operaciones mínimas')
+  const tradesMatch = tradesReq && !tradesReq.met ? tradesReq.value.match(/^(\d+) \/ (\d+)$/) : null
+  const missingTrades = tradesMatch ? Math.max(0, Number(tradesMatch[2]) - Number(tradesMatch[1])) : 0
+
+  const missingParts: string[] = []
+  if (missingMoney > 0) missingParts.push(money(missingMoney))
+  if (missingTrades > 0) missingParts.push(`${missingTrades} ${missingTrades === 1 ? 'operación' : 'operaciones'}`)
+
+  const nextAfter = status.perLevel.find((p) => p.level.position === next.position + 1)?.level ?? null
+
+  return (
+    <div className="card flex flex-wrap items-center gap-[20px]" style={{ padding: '15px 18px' }}>
+      <div className="flex flex-none items-center gap-[12px]">
+        <div
+          className="flex items-center justify-center tabular-nums"
+          style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
+            border: '1px solid var(--color-accent)',
+            fontFamily: 'var(--font-heading)',
+            fontSize: '15px',
+            boxShadow: '0 0 18px -7px var(--color-accent)',
+          }}
+        >
+          {next.position}
+        </div>
+        <div className="flex flex-col" style={{ lineHeight: 1.3 }}>
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13.5px' }}>
+            Nivel {next.position} · {next.name}
+          </span>
+          <span className="text-[11.5px] text-neutral-400">Objetivo del nivel: {levelGoalText(next)}</span>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-[7px]" style={{ minWidth: '220px' }}>
+        <div className="flex text-[11.5px] text-neutral-500 tabular-nums">
+          <span>
+            {money(progressAmount)} de {money(next.goalAmount)}
+          </span>
+          <span className="ml-auto text-neutral-300">{displayPct}%</span>
+        </div>
+        <div className="h-[7px] overflow-hidden rounded-[5px]" style={{ background: 'var(--color-neutral-800)' }}>
+          <div
+            style={{
+              width: `${displayPct}%`,
+              height: '100%',
+              borderRadius: '5px',
+              background: 'linear-gradient(90deg, var(--color-accent-600), var(--color-accent))',
+              transition: 'width .5s ease',
+            }}
+          />
+        </div>
+        <span className="text-[11px] text-neutral-500">
+          {nextAfter === null
+            ? 'Este es el último nivel definido — sigue así'
+            : missingParts.length > 0
+              ? `Te faltan ${missingParts.join(' y ')} para pasar al ${nextAfter.name}`
+              : `Cumple el resto de requisitos del nivel para pasar al ${nextAfter.name}`}
+        </span>
+      </div>
+
+      <Link href="/mi-nivel" className="btn btn-ghost flex-none" style={{ fontSize: '11.5px', padding: '6px 11px' }}>
+        Ver mi nivel
+      </Link>
+    </div>
+  )
+}
+
+/**
  * Cuerpo de `/calendario` (Fase 1), extraído a un componente compartido para que el mentor
  * pueda ver exactamente el mismo calendario, en modo solo lectura, de cualquier alumno
  * (Task 12 de Fase 2 — ver `app/(mentor)/estudiantes/[id]/calendario/page.tsx`).
@@ -48,7 +157,10 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
  * `?nuevo=`, mes anterior/siguiente) para que funcionen igual bajo `/calendario` (alumno)
  * que bajo `/estudiantes/[id]/calendario` (mentor). `headerActions` es el hueco donde la
  * página mentor monta `StudentPicker` (Task 12) — `undefined` en las páginas de alumno, sin
- * efecto visual.
+ * efecto visual. `levelBanner` (Task 15) es el `LevelStatus` del ESTUDIANTE, calculado por
+ * `app/(app)/calendario/page.tsx` — las páginas del mentor nunca lo pasan, así que el banner
+ * de nivel solo puede aparecer combinado con `!readOnly` (el mentor jamás lo ve, ni siquiera
+ * si algún día se le pasara por error).
  */
 export function CalendarView({
   trades,
@@ -58,6 +170,7 @@ export function CalendarView({
   readOnly,
   basePath,
   headerActions,
+  levelBanner,
 }: {
   trades: DbTrade[]
   y?: string
@@ -66,6 +179,7 @@ export function CalendarView({
   readOnly: boolean
   basePath: string
   headerActions?: ReactNode
+  levelBanner?: LevelStatus
 }) {
   const { trade, nuevo, dia } = searchParams
   const { year, month } = resolveYearMonth(y, m)
@@ -99,6 +213,8 @@ export function CalendarView({
       </PageHeader>
 
       <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+        {!readOnly && levelBanner ? <LevelBanner status={levelBanner} /> : null}
+
         <div className="flex flex-wrap items-center gap-[14px]">
           <div className="flex items-center gap-[8px]">
             <Link
