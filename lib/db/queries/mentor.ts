@@ -53,6 +53,24 @@ export async function listStudents(db: Db, mentorId: string): Promise<DbUser[]> 
 }
 
 /**
+ * Un estudiante concreto por id (Task 12 — páginas `/estudiantes/[id]/...`); `null` si
+ * `mentorId` no es mentor o si `studentId` no corresponde a un estudiante existente. A
+ * diferencia del resto de este módulo, no reusa `isStudent` como chequeo aparte: al
+ * consultar directamente sobre `users` (la misma tabla que `isStudent` mira), basta con
+ * combinar `id`+`role='student'` en un único WHERE — una sola consulta en vez de dos.
+ */
+export async function getStudentById(db: Db, mentorId: string, studentId: string): Promise<DbUser | null> {
+  if (!(await isMentor(db, mentorId))) return null
+
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.id, studentId), eq(users.role, 'student')))
+
+  return row ?? null
+}
+
+/**
  * Trades de `studentId`, más recientes primero (mismo orden que `listTrades`);
  * `[]` si `mentorId` no es mentor o si `studentId` no es un estudiante (no permite
  * que el mentor "vea" los trades de otro mentor pasando su id como studentId).

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createTrade, removeTrade, updateTrade } from '@/lib/actions/trades'
 import { uploadCapture } from '@/lib/actions/captures'
 import { formatLongDate } from '@/lib/format'
+import { EMOTIONS, PHASES } from '@/lib/emotions'
 import {
   DATOS_FIELDS,
   EDIT_TABS,
@@ -17,9 +18,12 @@ import {
   stepForField,
 } from './steps'
 import { DirectionToggle, FieldGrid, FormField, SectionTitle, type FormState, type TradeFieldName } from './fields'
+import { PHASE_LABELS } from './EmotionPicker'
 import {
+  CAPTURE_DEFS,
   EMPTY_JOURNAL,
   JournalSection,
+  QUESTIONS,
   type CapturePhase,
   type ExistingCapture,
   type JournalFormState,
@@ -121,7 +125,14 @@ function tradeToForm(t: EditableTrade): FormState {
   }
 }
 
-type TradeModalProps = { mode: 'create'; defaultDate: string } | { mode: 'edit'; detail: EditableTrade }
+type TradeModalProps = ({ mode: 'create'; defaultDate: string } | { mode: 'edit'; detail: EditableTrade }) & {
+  /** Modo mentor (Task 12): deshabilita todos los inputs (`<fieldset disabled>`), oculta
+   * Guardar/Eliminar/Continuar (el footer solo muestra Cerrar) y la Bitácora se renderiza
+   * como texto en vez del formulario editable (ver `ReadOnlyJournal`). En la práctica solo
+   * llega junto con `mode: 'edit'` — `TradeModalGate` nunca abre `mode: 'create'` para un
+   * mentor (`?nuevo` se ignora ahí). */
+  readOnly?: boolean
+}
 
 /**
  * Modal de operación. Crear = wizard de 4 pasos (Datos/Riesgo y resultado/Estrategia/
@@ -143,6 +154,10 @@ export function TradeModal(props: TradeModalProps) {
 
   const detail = props.mode === 'edit' ? props.detail : undefined
   const isCreate = props.mode === 'create'
+  // Solo verdadero junto a `detail` en la práctica (ver doc de `TradeModalProps.readOnly`) —
+  // `showReadOnlyJournal` más abajo revalida `detail !== undefined` de todos modos, sin
+  // asumir esa invariante desde aquí.
+  const readOnly = props.readOnly ?? false
 
   // Solo tiene sentido en modo editar: llega tras un `createTrade` exitoso cuyas capturas
   // fallaron al subir (ver `handleFinalSubmit`), que redirige aquí mismo con este query
@@ -553,8 +568,17 @@ export function TradeModal(props: TradeModalProps) {
   // `role="tabpanel"` (las 3 comparten la misma condición `tab === 0`, ver `showDatos`/
   // `showRiesgo`/`showEstrategia` arriba); en modo crear, cada una es un paso independiente
   // del wizard y no necesita ese wrapper (ver más abajo, en el JSX).
+  //
+  // El `<fieldset disabled={readOnly}>` (Task 12, modo mentor) deshabilita TODOS los
+  // controles de formulario descendientes (`input`/`select`/los `<button>` del segmentado
+  // Long/Short de `DirectionToggle`) de una sola vez — sin `.btn`/`.input:disabled` en
+  // `nocturne.css` para ninguno de esos elementos, no hay dimming/gris inesperado: el
+  // segmentado sigue mostrando su color activo (viene de `style` inline según `value`, no de
+  // `:disabled`) tal cual lo vería el alumno, solo que ya no responde a click. `display:
+  // contents` saca la caja del fieldset del flujo (sin afectar el `gap` del contenedor
+  // flex/grid que lo envuelve); `disabled={false}` (owner) lo deja completamente inerte.
   const datosRiesgoEstrategiaSections = (
-    <>
+    <fieldset disabled={readOnly} style={{ display: 'contents', border: 0, margin: 0, padding: 0 }}>
       {showDatos && (
         <section className="flex flex-col gap-[12px]">
           <SectionTitle>Información básica</SectionTitle>
@@ -606,10 +630,19 @@ export function TradeModal(props: TradeModalProps) {
           </FieldGrid>
         </section>
       )}
-    </>
+    </fieldset>
   )
 
-  const journalSectionEl = (
+  // Modo mentor (Task 12): la Bitácora se renderiza como texto de solo lectura
+  // (`ReadOnlyJournal`), no `JournalSection` — ese componente autoguarda y sube/borra
+  // capturas mediante Server Actions gateadas por dueño (`saveJournal`/`uploadCapture`/
+  // `deleteCapture`, todas `requireUser()` contra el trade), que no aplican — ni deberían
+  // intentarse — para un mentor viendo el trade de otra persona. `detail !== undefined` es
+  // redundante con `readOnly` en la práctica (ver doc de `TradeModalProps.readOnly`), pero se
+  // revalida aquí para no asumir esa invariante.
+  const journalSectionEl = readOnly && detail ? (
+    <ReadOnlyJournal journal={detail.journal} captures={detail.captures} hidden={!showBitacora} />
+  ) : (
     <JournalSection
       ref={journalRef}
       hidden={!showBitacora}
@@ -767,48 +800,155 @@ export function TradeModal(props: TradeModalProps) {
           </div>
 
           <div className="flex items-center gap-[10px] border-t border-neutral-800 px-[22px] py-[14px]">
-            {detail ? (
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                disabled={isPending}
-                className="btn btn-ghost text-[12px]"
-                style={{ color: 'var(--neg)' }}
-              >
-                {confirmDelete ? '¿Seguro? Eliminar definitivamente' : 'Eliminar'}
-              </button>
+            {readOnly ? (
+              // Modo mentor (Task 12): el footer solo muestra Cerrar — nada que guardar, nada
+              // que eliminar (`requestClose` sigue siendo la vía correcta: intenta un flush de
+              // la Bitácora antes de navegar, no-op aquí porque `journalRef` nunca se adjunta
+              // cuando se renderiza `ReadOnlyJournal` en vez de `JournalSection`).
+              <div className="ml-auto flex gap-[8px]">
+                <button type="button" onClick={() => void requestClose()} className="btn btn-ghost text-[12px]">
+                  Cerrar
+                </button>
+              </div>
             ) : (
-              <span className="text-[11.5px] text-neutral-500">Se guarda al finalizar</span>
-            )}
+              <>
+                {detail ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    disabled={isPending}
+                    className="btn btn-ghost text-[12px]"
+                    style={{ color: 'var(--neg)' }}
+                  >
+                    {confirmDelete ? '¿Seguro? Eliminar definitivamente' : 'Eliminar'}
+                  </button>
+                ) : (
+                  <span className="text-[11.5px] text-neutral-500">Se guarda al finalizar</span>
+                )}
 
-            <div className="ml-auto flex gap-[8px]">
-              <button type="button" onClick={() => void requestClose()} className="btn btn-ghost text-[12px]">
-                Cancelar
-              </button>
-              {isCreate && step < WIZARD_STEPS.length - 1 ? (
-                <button type="button" onClick={handleContinue} className="btn btn-primary text-[12px]" disabled={isPending}>
-                  Continuar
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleFinalSubmit}
-                  className="btn btn-primary text-[12px]"
-                  disabled={isPending}
-                >
-                  {isPending
-                    ? uploadingCaptures
-                      ? 'Subiendo capturas…'
-                      : 'Guardando…'
-                    : isCreate
-                      ? 'Guardar operación'
-                      : 'Guardar cambios'}
-                </button>
-              )}
-            </div>
+                <div className="ml-auto flex gap-[8px]">
+                  <button type="button" onClick={() => void requestClose()} className="btn btn-ghost text-[12px]">
+                    Cancelar
+                  </button>
+                  {isCreate && step < WIZARD_STEPS.length - 1 ? (
+                    <button type="button" onClick={handleContinue} className="btn btn-primary text-[12px]" disabled={isPending}>
+                      Continuar
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleFinalSubmit}
+                      className="btn btn-primary text-[12px]"
+                      disabled={isPending}
+                    >
+                      {isPending
+                        ? uploadingCaptures
+                          ? 'Subiendo capturas…'
+                          : 'Guardando…'
+                        : isCreate
+                          ? 'Guardar operación'
+                          : 'Guardar cambios'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Bitácora en modo solo lectura (mentor, Task 12) — mismo layout visual que
+ * `JournalSection` (mismas preguntas/etiquetas, vía `QUESTIONS`/`CAPTURE_DEFS` exportados
+ * de ahí, y las mismas fases/etiquetas de emoción, vía `PHASE_LABELS` exportado de
+ * `EmotionPicker`) pero sin ningún control editable: texto en bloques (`<p>`, no
+ * `<textarea>`), chips de emoción `aria-disabled` (sin `onClick`, sin autoguardado) y
+ * capturas mostradas sin las affordances de subir/eliminar (ni zona de drop, ni botón
+ * "Eliminar" — solo la imagen, o "Sin captura" si esa fase no tiene una).
+ *
+ * No reusa `JournalSection` directamente: ese componente autoguarda (`saveJournal`) y
+ * sube/borra capturas (`uploadCapture`/`deleteCapture`) mediante Server Actions gateadas por
+ * dueño (`requireUser()` contra el trade) — llamadas que fallarían, o que ni siquiera
+ * deberían intentarse, para un mentor viendo el trade de un alumno.
+ */
+function ReadOnlyJournal({
+  journal,
+  captures,
+  hidden,
+}: {
+  journal: JournalFormState
+  captures: ExistingCapture[]
+  hidden: boolean
+}) {
+  return (
+    <section className="flex flex-col gap-[14px]" style={hidden ? { display: 'none' } : undefined}>
+      <div className="flex flex-wrap items-baseline gap-[10px]">
+        <h3 className="m-0 text-[11px] tracking-[0.13em] uppercase text-neutral-500">Bitácora de la operación</h3>
+      </div>
+
+      <div className="grid gap-[12px]" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+        {QUESTIONS.map((q) => (
+          <div key={q.name} className="flex flex-col gap-[6px]">
+            <span className="text-[11.5px] text-neutral-300">{q.label}</span>
+            <p className="input m-0" style={{ minHeight: '90px', whiteSpace: 'pre-wrap' }}>
+              {journal[q.name] || '—'}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-[9px]">
+        <span className="text-[11.5px] text-neutral-300">Estado emocional</span>
+        <div className="flex flex-col gap-[9px]">
+          {PHASES.map((phase) => (
+            <div key={phase} className="flex flex-wrap items-center gap-[10px]">
+              <span className="w-[70px] flex-none text-[11px] text-neutral-500">{PHASE_LABELS[phase]}</span>
+              {EMOTIONS.map((emotion) => {
+                const active = journal.emotions[phase].includes(emotion)
+                return (
+                  <span
+                    key={emotion}
+                    aria-disabled="true"
+                    className="rounded-[20px] px-[11px] py-[5px] text-[11.5px]"
+                    style={{
+                      border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-neutral-700)'}`,
+                      background: active ? 'var(--color-accent-900)' : 'transparent',
+                      color: active ? 'var(--color-accent-200)' : 'var(--color-neutral-400)',
+                    }}
+                  >
+                    {emotion}
+                  </span>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-[12px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        {CAPTURE_DEFS.map((c) => {
+          const existing = captures.find((cap) => cap.phase === c.phase)
+          return (
+            <div
+              key={c.phase}
+              className="relative flex h-[150px] flex-col items-center justify-center gap-[6px] overflow-hidden rounded-[10px]"
+              style={{ border: '1px dashed var(--color-neutral-700)', background: 'var(--color-neutral-800)' }}
+            >
+              {existing ? (
+                // eslint-disable-next-line @next/next/no-img-element -- captura privada autenticada, no un asset estático de next/image
+                <img src={`/api/captures/${existing.id}`} alt={c.label} className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-[12px] text-neutral-400">Sin captura</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* F2-T16: FeedbackSection del mentor (retroalimentación sobre este trade) va aquí. */}
+    </section>
   )
 }

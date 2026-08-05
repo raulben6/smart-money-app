@@ -31,7 +31,8 @@ export const EMPTY_JOURNAL: JournalFormState = {
 
 type JournalFieldName = Exclude<keyof JournalFormState, 'emotions'>
 
-const QUESTIONS: { name: JournalFieldName; label: string }[] = [
+/** Exportado para que el render de solo lectura de la Bitácora (`TradeModal`, modo mentor, Task 12) reuse las mismas preguntas/etiquetas sin duplicarlas. */
+export const QUESTIONS: { name: JournalFieldName; label: string }[] = [
   { name: 'whyTook', label: '¿Por qué tomaste la operación?' },
   { name: 'whatSaw', label: '¿Qué viste en el mercado?' },
   { name: 'followedPlan', label: '¿Seguiste tu plan?' },
@@ -40,7 +41,8 @@ const QUESTIONS: { name: JournalFieldName; label: string }[] = [
   { name: 'improve', label: '¿Qué puedes mejorar?' },
 ]
 
-const CAPTURE_DEFS: { phase: CapturePhase; label: string }[] = [
+/** Exportado para que el render de solo lectura de capturas (`TradeModal`, modo mentor, Task 12) reuse las mismas fases/etiquetas sin duplicarlas. */
+export const CAPTURE_DEFS: { phase: CapturePhase; label: string }[] = [
   { phase: 'before', label: 'Antes de la operación' },
   { phase: 'after', label: 'Después de la operación' },
 ]

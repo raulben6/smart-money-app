@@ -31,7 +31,7 @@ export default async function DashboardPage({
         basePath="/dashboard"
       />
 
-      <TradeModalGate searchParams={resolvedSearchParams} userId={user.id} />
+      <TradeModalGate searchParams={resolvedSearchParams} viewer={{ mode: 'owner' }} />
     </>
   )
 }

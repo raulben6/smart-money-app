@@ -32,7 +32,7 @@ export default async function CalendarioPage({
         basePath="/calendario"
       />
 
-      <TradeModalGate searchParams={{ trade, nuevo, fecha }} userId={user.id} />
+      <TradeModalGate searchParams={{ trade, nuevo, fecha }} viewer={{ mode: 'owner' }} />
     </>
   )
 }

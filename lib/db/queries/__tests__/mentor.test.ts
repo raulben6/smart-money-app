@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { createTestDb, type TestDb } from '../../__tests__/helpers'
 import { users, levels, goals, notifications, tradeCaptures, trades, type DbUser } from '../../schema'
 import { insertTradeWithJournal } from '../trades'
-import { listStudents, listTradesForStudent, getTradeDetailForStudent, getCaptureForStudent } from '../mentor'
+import { listStudents, listTradesForStudent, getTradeDetailForStudent, getCaptureForStudent, getStudentById } from '../mentor'
 import { listGoalsForUser, listGoalsForStudent, insertGoal, updateGoalById, deleteGoalById } from '../goals'
 import { listLevels, updateLevelById, grantLevel, revokeGrant, listGrantIdsForUser } from '../levels'
 import {
@@ -168,6 +168,23 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
 
     it('getCaptureForStudent(mentor, idInexistente) -> null', async () => {
       expect(await getCaptureForStudent(db, mentor.id, NONEXISTENT_ID)).toBeNull()
+    })
+
+    it('getStudentById(mentor, A) -> A; getStudentById(A, B) -> null (A no es mentor)', async () => {
+      const paraMentor = await getStudentById(db, mentor.id, studentA.id)
+      expect(paraMentor?.id).toBe(studentA.id)
+      expect(paraMentor?.name).toBe('Estudiante A')
+
+      const paraEstudiante = await getStudentById(db, studentA.id, studentB.id)
+      expect(paraEstudiante).toBeNull()
+    })
+
+    it('getStudentById(mentor, mentor) -> null (el target no es un estudiante)', async () => {
+      expect(await getStudentById(db, mentor.id, mentor.id)).toBeNull()
+    })
+
+    it('getStudentById(mentor, idInexistente) -> null', async () => {
+      expect(await getStudentById(db, mentor.id, NONEXISTENT_ID)).toBeNull()
     })
 
     it('getCaptureForStudent excluye una captura cuyo trade pertenece al propio mentor (el join exige users.role=student, no solo el gate isMentor)', async () => {
