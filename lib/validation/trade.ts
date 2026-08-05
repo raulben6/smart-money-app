@@ -17,7 +17,12 @@ function isRealDate(y: number, m: number, d: number): boolean {
   return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d
 }
 
-const tradeDate = z
+/**
+ * Fecha AAAA-MM-DD con regex + validación de calendario real (rechaza 30 de febrero, etc.).
+ * Exportado como `isoDateSchema` para reutilizarse en otros módulos de validación
+ * (p. ej. `lib/validation/mentor.ts`) sin duplicar la lógica de `isRealDate`.
+ */
+export const isoDateSchema = z
   .string()
   .regex(DATE_RE, 'Fecha inválida, use el formato AAAA-MM-DD')
   .refine((val) => {
@@ -31,13 +36,18 @@ const asset = z
   .transform((v) => v.trim().toUpperCase())
   .pipe(z.string().min(1, 'El activo es obligatorio').max(20, 'Máximo 20 caracteres'))
 
-/** '' / undefined / null del form -> null; cualquier otro valor pasa a `inner` (nunca NaN). */
-function nullableOn<T extends z.ZodType>(inner: T) {
+/**
+ * '' / undefined / null del form -> null; cualquier otro valor pasa a `inner` (nunca NaN).
+ * Exportado para reutilizarse en otros módulos de validación (p. ej. `mentor.ts`), tanto
+ * para campos numéricos (`optionalNumber`) como para otros tipos nullable (p. ej. un uuid
+ * opcional: `nullableOn(z.uuid())`).
+ */
+export function nullableOn<T extends z.ZodType>(inner: T) {
   return z.preprocess((val) => (val === '' || val === undefined || val === null ? null : val), inner.nullable())
 }
 
 /** Numérico opcional: coerciona strings del form a número; ausente/'' -> null. */
-function optionalNumber(build: (n: z.ZodNumber) => z.ZodNumber = (n) => n) {
+export function optionalNumber(build: (n: z.ZodNumber) => z.ZodNumber = (n) => n) {
   return nullableOn(build(z.coerce.number()))
 }
 
@@ -50,8 +60,12 @@ function optionalNumber(build: (n: z.ZodNumber) => z.ZodNumber = (n) => n) {
  * negativos son valores legítimos (p.ej. breakeven o pérdida) y pasan. Strings no numéricos
  * (p.ej. 'abc') siguen fallando con el mensaje por defecto del locale global, ya que no se
  * consideran "vacíos" y sí llegan a `z.coerce.number()`.
+ *
+ * `build` permite encadenar restricciones adicionales (p. ej. `.positive(...)`) sobre el
+ * `z.coerce.number()` interno, igual que en `optionalNumber`; por defecto es la identidad
+ * para no alterar el comportamiento de los llamadores existentes (p.ej. `pnlUsd`).
  */
-function requiredNumber(requiredMessage: string) {
+export function requiredNumber(requiredMessage: string, build: (n: z.ZodNumber) => z.ZodNumber = (n) => n) {
   return z.preprocess((val, ctx) => {
     const isEmpty = val === undefined || val === null || (typeof val === 'string' && val.trim() === '')
     if (isEmpty) {
@@ -59,7 +73,7 @@ function requiredNumber(requiredMessage: string) {
       return z.NEVER
     }
     return val
-  }, z.coerce.number())
+  }, build(z.coerce.number()))
 }
 
 /** Hora HH:mm (24h) opcional; ausente/'' -> null. */
@@ -73,7 +87,7 @@ function optionalText(max: number) {
 }
 
 export const tradeSchema = z.object({
-  tradeDate,
+  tradeDate: isoDateSchema,
   asset,
   market: z.enum(MARKETS, 'Mercado inválido'),
   direction: z.enum(DIRECTIONS, 'Dirección inválida'),
