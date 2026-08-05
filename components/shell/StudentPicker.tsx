@@ -13,17 +13,29 @@ import type { DbUser } from '@/lib/db/schema'
  * `subroute` fija el destino a la ruta binding del ledger (`/estudiantes/[id]/dashboard` o
  * `/estudiantes/[id]/calendario`, ver Task 11) — cada página mentor pasa la suya, no la
  * deriva de `usePathname()`, para no depender de la forma exacta de la URL actual.
+ *
+ * `hrefFor` (Task 14) generaliza el destino para páginas cuya selección de alumno vive en
+ * un query param sobre la MISMA ruta (`/objetivos-estudiantes?e=<id>`) en vez de un
+ * segmento `[id]` de la URL — no encaja en el patrón fijo `subroute`, así que el caller
+ * calcula el href completo por sí mismo. Ambas variantes son mutuamente excluyentes
+ * (unión discriminada): los dos call sites existentes (`estudiantes/[id]/dashboard` y
+ * `.../calendario`) siguen usando `subroute` sin cambios.
  */
+type StudentPickerNav = { subroute: 'dashboard' | 'calendario'; hrefFor?: never } | { subroute?: never; hrefFor: (id: string) => string }
+
 export function StudentPicker({
   students,
   currentId,
-  subroute,
+  ...nav
 }: {
   students: Pick<DbUser, 'id' | 'name'>[]
   currentId: string
-  subroute: 'dashboard' | 'calendario'
-}) {
+} & StudentPickerNav) {
   const router = useRouter()
+
+  function hrefFor(id: string): string {
+    return typeof nav.hrefFor === 'function' ? nav.hrefFor(id) : `/estudiantes/${id}/${nav.subroute}`
+  }
 
   return (
     <div
@@ -34,7 +46,7 @@ export function StudentPicker({
       <select
         aria-label="Viendo a"
         value={currentId}
-        onChange={(e) => router.push(`/estudiantes/${e.target.value}/${subroute}`)}
+        onChange={(e) => router.push(hrefFor(e.target.value))}
         className="text-[12px]"
         style={{
           background: 'transparent',

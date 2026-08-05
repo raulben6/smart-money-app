@@ -79,7 +79,10 @@ export async function createGoal(studentId: string, raw: unknown): Promise<Actio
     if (!id) {
       return { ok: false, error: SIN_PERMISO }
     }
+    // '/objetivos' (vista del estudiante) y '/objetivos-estudiantes' (vista del mentor,
+    // ledger F2-T11 — NO '/objetivos', que ya usa el grupo (app) del estudiante).
     revalidatePath('/objetivos')
+    revalidatePath('/objetivos-estudiantes')
     return { ok: true, data: { id } }
   } catch (err) {
     console.error('[createGoal]', err)
@@ -107,6 +110,7 @@ export async function updateGoal(goalId: string, raw: unknown): Promise<ActionRe
       return { ok: false, error: SIN_PERMISO }
     }
     revalidatePath('/objetivos')
+    revalidatePath('/objetivos-estudiantes')
     return { ok: true, data: null }
   } catch (err) {
     console.error('[updateGoal]', err)
@@ -129,6 +133,7 @@ export async function removeGoal(goalId: string): Promise<ActionResult<null>> {
       return { ok: false, error: SIN_PERMISO }
     }
     revalidatePath('/objetivos')
+    revalidatePath('/objetivos-estudiantes')
     return { ok: true, data: null }
   } catch (err) {
     console.error('[removeGoal]', err)
