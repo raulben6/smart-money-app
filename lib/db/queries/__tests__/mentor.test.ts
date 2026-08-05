@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { createTestDb, type TestDb } from '../../__tests__/helpers'
-import { users, levels, goals, notifications, tradeCaptures, type DbUser } from '../../schema'
+import { users, levels, goals, notifications, tradeCaptures, trades, type DbUser } from '../../schema'
 import { insertTradeWithJournal } from '../trades'
 import { listStudents, listTradesForStudent, getTradeDetailForStudent, getCaptureForStudent } from '../mentor'
 import { listGoalsForUser, listGoalsForStudent, insertGoal, updateGoalById, deleteGoalById } from '../goals'
@@ -121,6 +121,18 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       expect(await listTradesForStudent(db, mentor.id, mentor.id)).toEqual([])
     })
 
+    it('listTradesForStudent(mentor, A) NO incluye trades de B (aislamiento real del filtro, no solo el gate de rol)', async () => {
+      // Ambos estudiantes tienen trades en la MISMA base: si el WHERE por userId se
+      // quitara, esta consulta seguiría pasando el gate isMentor/isStudent y devolvería
+      // también el trade de B — a diferencia de la prueba (b), que nunca sembró un
+      // trade de B y por tanto no puede detectar esa regresión.
+      const tradeIdA = await insertTradeWithJournal(db, studentA.id, minimalTrade)
+      await insertTradeWithJournal(db, studentB.id, { ...minimalTrade, asset: 'MSFT' })
+
+      const paraA = await listTradesForStudent(db, mentor.id, studentA.id)
+      expect(paraA.map((t) => t.id)).toEqual([tradeIdA])
+    })
+
     it('(c) getTradeDetailForStudent(mentor, A, tradeDeA) -> detalle; getTradeDetailForStudent(mentor, B, tradeDeA) -> null (studentId no coincide con el dueño)', async () => {
       const tradeId = await insertTradeWithJournal(db, studentA.id, minimalTrade)
 
@@ -157,6 +169,29 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
     it('getCaptureForStudent(mentor, idInexistente) -> null', async () => {
       expect(await getCaptureForStudent(db, mentor.id, NONEXISTENT_ID)).toBeNull()
     })
+
+    it('getCaptureForStudent excluye una captura cuyo trade pertenece al propio mentor (el join exige users.role=student, no solo el gate isMentor)', async () => {
+      // Se inserta un trade directamente con userId = mentor.id (fuera del flujo normal
+      // de la app: un mentor no opera) precisamente para poder distinguir "el filtro de
+      // rol del join funciona" de "el gate isMentor funciona" — sin esta fila, ambas
+      // versiones (con y sin `eq(users.role, 'student')` en el WHERE) devolverían el
+      // mismo resultado en el resto de la suite.
+      const [tradeDelMentor] = await db
+        .insert(trades)
+        .values({ ...minimalTrade, userId: mentor.id })
+        .returning()
+      const [capturaDelMentor] = await db
+        .insert(tradeCaptures)
+        .values({
+          tradeId: tradeDelMentor.id,
+          phase: 'before',
+          blobPathname: `captures/${tradeDelMentor.id}/before`,
+          contentType: 'image/png',
+        })
+        .returning()
+
+      expect(await getCaptureForStudent(db, mentor.id, capturaDelMentor.id)).toBeNull()
+    })
   })
 
   describe('goals.ts', () => {
@@ -184,6 +219,19 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       expect(await insertGoal(db, mentor.id, NONEXISTENT_ID, minimalGoal)).toBeNull()
     })
 
+    it('insertGoal ignora una clave hostil `userId` en el payload (el objetivo queda en el estudiante autorizado, no en el hostil)', async () => {
+      const hostilePayload = { ...minimalGoal, userId: studentB.id } as GoalFormValues & { userId: string }
+
+      const goalId = await insertGoal(db, mentor.id, studentA.id, hostilePayload)
+      expect(typeof goalId).toBe('string')
+
+      const deA = await listGoalsForUser(db, studentA.id)
+      expect(deA.map((g) => g.id)).toEqual([goalId])
+
+      const deB = await listGoalsForUser(db, studentB.id)
+      expect(deB).toEqual([])
+    })
+
     it('listGoalsForStudent(mentor, A) -> objetivos de A; listGoalsForStudent(A, B) -> [] (A no es mentor)', async () => {
       const goalId = await insertGoal(db, mentor.id, studentA.id, minimalGoal)
 
@@ -192,6 +240,17 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
 
       const paraEstudiante = await listGoalsForStudent(db, studentA.id, studentB.id)
       expect(paraEstudiante).toEqual([])
+    })
+
+    it('listGoalsForStudent(mentor, A) y listGoalsForUser(A) NO incluyen objetivos de B (aislamiento real, ambos con objetivos en la misma base)', async () => {
+      const goalIdA = await insertGoal(db, mentor.id, studentA.id, minimalGoal)
+      await insertGoal(db, mentor.id, studentB.id, { ...minimalGoal, name: 'Meta de B' })
+
+      const paraMentorSobreA = await listGoalsForStudent(db, mentor.id, studentA.id)
+      expect(paraMentorSobreA.map((g) => g.id)).toEqual([goalIdA])
+
+      const propiasDeA = await listGoalsForUser(db, studentA.id)
+      expect(propiasDeA.map((g) => g.id)).toEqual([goalIdA])
     })
 
     it('(d) updateGoalById(A, goalDeA, ...) -> false (un estudiante no edita ni sus propios objetivos)', async () => {
@@ -252,11 +311,27 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       expect(lista.map((l) => l.position)).toEqual([1, 2, 3, 4, 5])
     })
 
-    it('(e) updateLevelById(A, ...) -> false; updateLevelById(mentor, ...) -> true y actualiza los campos', async () => {
+    it('(e) updateLevelById(A, ...) -> false y el nivel queda intacto (sin cambios, no solo "false")', async () => {
       const nivel1 = await getLevelByPosition(db, 1)
 
-      const noAutorizado = await updateLevelById(db, studentA.id, nivel1.id, minimalLevelValues)
+      // Usa un valor DISTINTO al de la prueba de éxito para poder distinguir "el
+      // cambio se aplicó igualmente" de "el cambio fue realmente rechazado": si
+      // ambas pruebas usaran el mismo `minimalLevelValues`, una implementación que
+      // ignorara el gate de autorización y aplicara el update de todos modos pasaría
+      // esta prueba sin que se notara.
+      const noAutorizado = await updateLevelById(db, studentA.id, nivel1.id, {
+        ...minimalLevelValues,
+        name: 'Intento denegado',
+      })
       expect(noAutorizado).toBe(false)
+
+      const [intacto] = await db.select().from(levels).where(eq(levels.id, nivel1.id))
+      expect(intacto.name).toBe('Nivel 1') // el nombre original sembrado por la migración, NO 'Intento denegado'
+      expect(intacto.goalAmount).toBe(500)
+    })
+
+    it('updateLevelById(mentor, ...) -> true y actualiza los campos', async () => {
+      const nivel1 = await getLevelByPosition(db, 1)
 
       const autorizado = await updateLevelById(db, mentor.id, nivel1.id, minimalLevelValues)
       expect(autorizado).toBe(true)
@@ -269,6 +344,22 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
 
     it('updateLevelById(mentor, idInexistente, ...) -> false', async () => {
       expect(await updateLevelById(db, mentor.id, NONEXISTENT_ID, minimalLevelValues)).toBe(false)
+    })
+
+    it('updateLevelById ignora una clave hostil `id` en el payload (no redirige la escritura a otro nivel)', async () => {
+      const nivel1 = await getLevelByPosition(db, 1)
+      const nivel2 = await getLevelByPosition(db, 2)
+
+      const hostilePayload = { ...minimalLevelValues, id: nivel2.id } as LevelFormValues & { id: string }
+
+      const ok = await updateLevelById(db, mentor.id, nivel1.id, hostilePayload)
+      expect(ok).toBe(true)
+
+      const [actualizado] = await db.select().from(levels).where(eq(levels.id, nivel1.id))
+      expect(actualizado.name).toBe('Nivel actualizado') // el nivel1 (el pasado como argumento) sí cambió
+
+      const [otroIntacto] = await db.select().from(levels).where(eq(levels.id, nivel2.id))
+      expect(otroIntacto.name).toBe('Nivel 2') // el nivel2 (el de la clave hostil `id`) queda intacto
     })
 
     it('(e) grantLevel(mentor, A, nivel5) -> true y aparece en listGrantIdsForUser(A)', async () => {
@@ -319,6 +410,17 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
     it('revokeGrant(mentor, A, nivelNoOtorgado) -> false (nada que borrar)', async () => {
       const nivel1 = await getLevelByPosition(db, 1)
       expect(await revokeGrant(db, mentor.id, studentA.id, nivel1.id)).toBe(false)
+    })
+
+    it('listGrantIdsForUser(A) NO incluye grants de B (aislamiento real, ambos con grants en la misma base)', async () => {
+      const nivel1 = await getLevelByPosition(db, 1)
+      const nivel5 = await getLevelByPosition(db, 5)
+
+      await grantLevel(db, mentor.id, studentA.id, nivel1.id)
+      await grantLevel(db, mentor.id, studentB.id, nivel5.id)
+
+      expect(await listGrantIdsForUser(db, studentA.id)).toEqual([nivel1.id])
+      expect(await listGrantIdsForUser(db, studentB.id)).toEqual([nivel5.id])
     })
   })
 
