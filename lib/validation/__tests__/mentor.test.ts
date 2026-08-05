@@ -49,6 +49,15 @@ describe('goalSchema', () => {
     expect(result.success).toBe(false)
   })
 
+  it('riesgo_diario con thresholdValue fuera de rango (500) falla con el mensaje de rango esperado', () => {
+    const result = goalSchema.safeParse({ ...validGoalBase, kind: 'riesgo_diario', thresholdValue: 500 })
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(
+      result.error.issues.some((i) => i.path[0] === 'thresholdValue' && i.message === 'Debe ser menor o igual a 100'),
+    ).toBe(true)
+  })
+
   it('riesgo_diario con thresholdValue no positivo (0) falla', () => {
     const result = goalSchema.safeParse({ ...validGoalBase, kind: 'riesgo_diario', thresholdValue: 0 })
     expect(result.success).toBe(false)
@@ -56,6 +65,16 @@ describe('goalSchema', () => {
 
   it('ganancia CON thresholdValue no falla: se fuerza a null (no es un error)', () => {
     const result = goalSchema.safeParse({ ...validGoalBase, kind: 'ganancia', thresholdValue: 3 })
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.thresholdValue).toBeNull()
+  })
+
+  it('ganancia CON thresholdValue fuera de rango (500) NO falla: se descarta sin validar el rango (se fuerza a null)', () => {
+    // Regresión: el rango (>0, <=100) solo aplica cuando kind === 'riesgo_diario'. Para
+    // cualquier otro kind el campo es irrelevante y se descarta tal cual venga, sin
+    // rechazar valores fuera de rango.
+    const result = goalSchema.safeParse({ ...validGoalBase, kind: 'ganancia', thresholdValue: 500 })
     expect(result.success).toBe(true)
     if (!result.success) return
     expect(result.data.thresholdValue).toBeNull()
@@ -75,9 +94,27 @@ describe('goalSchema', () => {
     expect(result.data.manualProgress).toBeNull()
   })
 
+  it('operaciones CON manualProgress fuera de rango (-1) NO falla: se descarta sin validar el rango (se fuerza a null)', () => {
+    // Misma regresión que thresholdValue: el rango (0-100) solo aplica cuando
+    // kind === 'manual'. Para otros kinds el campo se descarta sin validar el rango.
+    const result = goalSchema.safeParse({ ...validGoalBase, kind: 'operaciones', manualProgress: -1 })
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.manualProgress).toBeNull()
+  })
+
   it('manualProgress fuera de rango (150) falla', () => {
     const result = goalSchema.safeParse({ ...validGoalBase, kind: 'manual', manualProgress: 150 })
     expect(result.success).toBe(false)
+  })
+
+  it('manual con manualProgress fuera de rango (150) falla con el mensaje de rango esperado', () => {
+    const result = goalSchema.safeParse({ ...validGoalBase, kind: 'manual', manualProgress: 150 })
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(
+      result.error.issues.some((i) => i.path[0] === 'manualProgress' && i.message === 'Debe ser menor o igual a 100'),
+    ).toBe(true)
   })
 
   it('startDate > dueDate falla con el mensaje en español esperado', () => {

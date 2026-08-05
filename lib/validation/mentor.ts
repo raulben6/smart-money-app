@@ -17,12 +17,14 @@ export const goalSchema = z
     name: z.string().min(1, 'El nombre es obligatorio').max(80, 'Máximo 80 caracteres'),
     description: z.string().max(500, 'Máximo 500 caracteres').default(''),
     targetValue: requiredNumber('El valor objetivo es obligatorio', (n) => n.positive(POSITIVE_MSG)),
-    // Solo tiene sentido para kind 'riesgo_diario'; para cualquier otro kind se fuerza a
-    // null en el `.transform` de abajo (un valor recibido en, p.ej., 'ganancia' NO es un
-    // error, simplemente se descarta).
-    thresholdValue: optionalNumber((n) => n.positive(POSITIVE_MSG).max(100, MAX_100_MSG)),
-    // Solo tiene sentido para kind 'manual'; mismo criterio de "forzar a null" que thresholdValue.
-    manualProgress: optionalNumber((n) => n.min(0, 'Debe ser mayor o igual a 0').max(100, MAX_100_MSG)),
+    // Sin restricciones de rango a nivel de campo: tanto la obligatoriedad como el rango
+    // (>0, <=100) SOLO aplican cuando kind === 'riesgo_diario' (ver `.superRefine` abajo).
+    // Si se aplicaran aquí (p.ej. `.max(100)`), un valor fuera de rango en, digamos,
+    // 'ganancia' fallaría la validación ANTES de llegar al `.transform` que lo descarta —
+    // justo el bug que este comentario documenta haber evitado.
+    thresholdValue: optionalNumber(),
+    // Mismo criterio que thresholdValue: el rango (0-100) solo aplica cuando kind === 'manual'.
+    manualProgress: optionalNumber(),
     startDate: isoDateSchema,
     dueDate: isoDateSchema,
   })
@@ -31,17 +33,35 @@ export const goalSchema = z
     message: 'La fecha de inicio no puede ser posterior al vencimiento',
     path: ['dueDate'],
   })
-  // `thresholdValue` es el único campo cuya ausencia depende de `kind`: se exige (>0 y
-  // <=100, ya validado arriba) únicamente cuando kind === 'riesgo_diario'. No usamos
-  // `requiredNumber` aquí porque la "obligatoriedad" depende de otro campo del objeto, no
-  // solo del propio valor.
+  // thresholdValue/manualProgress son los únicos campos cuya obligatoriedad Y rango
+  // dependen de `kind`: no usamos `requiredNumber`/`optionalNumber` con builder para esto
+  // porque la validación depende de OTRO campo del objeto, no solo del propio valor. Un
+  // valor fuera de rango en un kind donde el campo NO aplica no entra aquí (no se valida,
+  // ver el `.transform` de abajo que lo descarta sin error).
   .superRefine((data, ctx) => {
-    if (data.kind === 'riesgo_diario' && data.thresholdValue === null) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'El umbral es obligatorio para objetivos de riesgo diario',
-        path: ['thresholdValue'],
-      })
+    if (data.kind === 'riesgo_diario') {
+      if (data.thresholdValue === null) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'El umbral es obligatorio para objetivos de riesgo diario',
+          path: ['thresholdValue'],
+        })
+      } else {
+        if (data.thresholdValue <= 0) {
+          ctx.addIssue({ code: 'custom', message: POSITIVE_MSG, path: ['thresholdValue'] })
+        }
+        if (data.thresholdValue > 100) {
+          ctx.addIssue({ code: 'custom', message: MAX_100_MSG, path: ['thresholdValue'] })
+        }
+      }
+    }
+    if (data.kind === 'manual' && data.manualProgress !== null) {
+      if (data.manualProgress < 0) {
+        ctx.addIssue({ code: 'custom', message: 'Debe ser mayor o igual a 0', path: ['manualProgress'] })
+      }
+      if (data.manualProgress > 100) {
+        ctx.addIssue({ code: 'custom', message: MAX_100_MSG, path: ['manualProgress'] })
+      }
     }
   })
   // Fuerza a null los campos que no aplican al kind seleccionado (ver comentarios arriba).
