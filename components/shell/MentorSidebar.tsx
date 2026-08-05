@@ -3,20 +3,26 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
-import { ChartLineUp, CalendarBlank, Bell, Target, Medal } from '@phosphor-icons/react'
+import { SquaresFour, ArrowsLeftRight, Target, Medal, EnvelopeSimple, UserPlus, type Icon } from '@phosphor-icons/react'
 import { Brand } from './Brand'
-import { NotificationBadge } from './NotificationBadge'
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', Icon: ChartLineUp },
-  { href: '/calendario', label: 'Calendario', Icon: CalendarBlank },
-  { href: '/notificaciones', label: 'Notificaciones', Icon: Bell },
-  { href: '/objetivos', label: 'Objetivos', Icon: Target },
-  { href: '/mi-nivel', label: 'Mi nivel', Icon: Medal },
-] as const
+/**
+ * `matchPrefixes`: rutas adicionales que también marcan el item como activo. Solo
+ * "Panel general" lo usa — Task 12 añade `/estudiantes/[id]/...` (dashboard/calendario
+ * de un alumno concreto, accesible vía "Abrir" desde el panel), y esas subrutas no
+ * tienen item propio en la nav fija, así que deben resaltar "Panel general".
+ */
+const NAV_ITEMS: { href: string; label: string; Icon: Icon; matchPrefixes: string[] }[] = [
+  { href: '/panel', label: 'Panel general', Icon: SquaresFour, matchPrefixes: ['/estudiantes/'] },
+  { href: '/comparador', label: 'Comparador', Icon: ArrowsLeftRight, matchPrefixes: [] },
+  { href: '/objetivos-estudiantes', label: 'Objetivos', Icon: Target, matchPrefixes: [] },
+  { href: '/niveles', label: 'Niveles', Icon: Medal, matchPrefixes: [] },
+  { href: '/mensajes', label: 'Mensajes', Icon: EnvelopeSimple, matchPrefixes: [] },
+  { href: '/invitaciones', label: 'Invitaciones', Icon: UserPlus, matchPrefixes: [] },
+]
 
-/** Sidebar de escritorio (≥1024px). Ver mockup líneas 27-64. */
-export function Sidebar({ name, initials, unreadCount }: { name: string; initials: string; unreadCount: number }) {
+/** Sidebar de escritorio del mentor (≥1024px). Calca `Sidebar.tsx`; nav propia (mockup línea 597, ver Task 11 report para la decisión de rutas). */
+export function MentorSidebar({ name, initials }: { name: string; initials: string }) {
   const pathname = usePathname()
 
   return (
@@ -24,8 +30,11 @@ export function Sidebar({ name, initials, unreadCount }: { name: string; initial
       <Brand />
 
       <nav aria-label="Navegación principal" className="flex flex-col gap-0.5">
-        {NAV_ITEMS.map(({ href, label, Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`)
+        <span className="px-2 pb-2 text-[9.5px] uppercase tracking-[.14em] text-neutral-500">Mentor</span>
+
+        {NAV_ITEMS.map(({ href, label, Icon, matchPrefixes }) => {
+          const active =
+            pathname === href || pathname.startsWith(`${href}/`) || matchPrefixes.some((p) => pathname.startsWith(p))
           return (
             <Link
               key={href}
@@ -39,7 +48,6 @@ export function Sidebar({ name, initials, unreadCount }: { name: string; initial
             >
               <Icon size={16} aria-hidden className="shrink-0" />
               <span>{label}</span>
-              {href === '/notificaciones' ? <NotificationBadge count={unreadCount} className="ml-auto" /> : null}
             </Link>
           )
         })}
@@ -52,7 +60,7 @@ export function Sidebar({ name, initials, unreadCount }: { name: string; initial
           </div>
           <div className="flex min-w-0 flex-col leading-[1.25]">
             <span className="truncate text-[12px] text-text">{name}</span>
-            <span className="text-[10.5px] text-neutral-500">Nivel —</span>
+            <span className="text-[10.5px] text-neutral-500">Mentor</span>
           </div>
         </div>
         <UserButton appearance={{ elements: { avatarBox: 'h-6 w-6' } }} />

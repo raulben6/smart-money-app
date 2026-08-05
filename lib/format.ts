@@ -1,3 +1,11 @@
+/** Iniciales de `name` para el chip de usuario: 'Andrea Ruiz' -> 'AR', 'Andrea' -> 'AN', '' -> '—'. */
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '—'
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
+  return (parts[0]![0] + parts[parts.length - 1]![0]).toUpperCase()
+}
+
 /** Formatea USD sin decimales, estilo en-US: money(1595) -> '$1,595', money(-180) -> '-$180'. */
 export function money(n: number): string {
   const sign = n < 0 ? '-' : ''

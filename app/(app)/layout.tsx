@@ -1,26 +1,25 @@
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
+import { getDb } from '@/lib/db'
+import { unreadCountForUser } from '@/lib/db/queries/notifications'
+import { initials } from '@/lib/format'
 import { Sidebar } from '@/components/shell/Sidebar'
 import { BottomNav } from '@/components/shell/BottomNav'
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '—'
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
-  return (parts[0]![0] + parts[parts.length - 1]![0]).toUpperCase()
-}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser()
   if (user.initialBalance === null) redirect('/onboarding')
 
+  const db = getDb()
+  const unreadCount = await unreadCountForUser(db, user.id)
+
   return (
     <div className="flex min-h-screen">
-      <Sidebar name={user.name} initials={initialsOf(user.name)} />
+      <Sidebar name={user.name} initials={initials(user.name)} unreadCount={unreadCount} />
       <main className="flex min-w-0 flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
         {children}
       </main>
-      <BottomNav />
+      <BottomNav unreadCount={unreadCount} />
     </div>
   )
 }

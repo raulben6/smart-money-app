@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
-import { ChartLineUp, CalendarBlank, Plus, type Icon } from '@phosphor-icons/react'
+import { ChartLineUp, CalendarBlank, Bell, Plus, type Icon } from '@phosphor-icons/react'
+import { NotificationBadge } from './NotificationBadge'
 
 /** Nav inferior móvil (<1024px). */
-export function BottomNav() {
+export function BottomNav({ unreadCount }: { unreadCount: number }) {
   const pathname = usePathname()
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
 
@@ -29,6 +30,14 @@ export function BottomNav() {
 
         <NavItem href="/calendario" label="Calendario" Icon={CalendarBlank} active={isActive('/calendario')} />
 
+        <NavItem
+          href="/notificaciones"
+          label="Notificaciones"
+          Icon={Bell}
+          active={isActive('/notificaciones')}
+          badgeCount={unreadCount}
+        />
+
         <div className="flex h-full items-center">
           <UserButton appearance={{ elements: { avatarBox: 'h-7 w-7' } }} />
         </div>
@@ -42,11 +51,13 @@ function NavItem({
   label,
   Icon,
   active,
+  badgeCount,
 }: {
   href: string
   label: string
   Icon: Icon
   active: boolean
+  badgeCount?: number
 }) {
   return (
     <Link
@@ -54,7 +65,12 @@ function NavItem({
       aria-current={active ? 'page' : undefined}
       className={`flex flex-col items-center gap-0.5 text-[10px] ${active ? 'text-accent' : 'text-neutral-400'}`}
     >
-      <Icon size={20} aria-hidden />
+      <span className="relative flex">
+        <Icon size={20} aria-hidden />
+        {typeof badgeCount === 'number' ? (
+          <NotificationBadge count={badgeCount} className="absolute -right-1.5 -top-1" />
+        ) : null}
+      </span>
       <span>{label}</span>
     </Link>
   )
