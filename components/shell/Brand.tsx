@@ -1,12 +1,11 @@
-/** Marca "Smart Trader Performance System": rombo con glow de acento + wordmark. Ver mockup líneas 28-36. */
+/** Marca "Smart Trader Performance System" para el sidebar (fondo oscuro en
+ *  ambos temas): sello relleno esmeralda con rombo blanco + wordmark, según el
+ *  mockup de la migración de tema. */
 export function Brand() {
   return (
     <div className="flex items-center gap-[10px] px-2">
-      <div
-        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] border border-accent"
-        style={{ boxShadow: '0 0 14px -4px var(--color-accent)' }}
-      >
-        <div className="h-2 w-2 rotate-45 rounded-[2px] bg-accent" />
+      <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-accent-fill">
+        <div className="h-[9px] w-[9px] rotate-45 rounded-[2px] bg-on-accent" />
       </div>
       <div className="flex flex-col leading-[1.15]">
         <span
@@ -15,7 +14,7 @@ export function Brand() {
         >
           Smart Trader
         </span>
-        <span className="text-[9px] uppercase tracking-[.14em] text-neutral-400">Performance System</span>
+        <span className="text-[9px] uppercase tracking-[.14em] text-neutral-500">Performance System</span>
       </div>
     </div>
   )

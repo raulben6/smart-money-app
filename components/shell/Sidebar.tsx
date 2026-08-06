@@ -6,6 +6,7 @@ import { UserButton } from '@clerk/nextjs'
 import { ChartLineUp, CalendarBlank, Bell, Target, Medal } from '@phosphor-icons/react'
 import { Brand } from './Brand'
 import { NotificationBadge } from './NotificationBadge'
+import { ThemeToggle } from './ThemeToggle'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', Icon: ChartLineUp },
@@ -31,7 +32,7 @@ export function Sidebar({
   const pathname = usePathname()
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-[22px] border-r border-neutral-800 px-[14px] py-[20px] lg:flex">
+    <aside className="sidebar-scope sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-[22px] bg-sidebar px-[14px] py-[20px] lg:flex">
       <Brand />
 
       <nav aria-label="Navegación principal" className="flex flex-col gap-0.5">
@@ -66,6 +67,7 @@ export function Sidebar({
             <span className="truncate text-[10.5px] text-neutral-500">{levelName}</span>
           </div>
         </div>
+        <ThemeToggle />
         <UserButton appearance={{ elements: { avatarBox: 'h-6 w-6' } }} />
       </div>
     </aside>

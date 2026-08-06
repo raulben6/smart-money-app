@@ -1,20 +1,38 @@
-/* Nocturne — design-system tokens and component classes. This file is the source of truth for the system's look; retune it here and see readme.md. */
+/* Nocturne — design-system tokens and component classes. This file is the source
+   of truth for the system's look; retune it here and see readme.md.
+
+   Temas (migración 2026-08-06, mockup del usuario en Claude Design):
+   - Oscuro (base en :root): fondo #161826 con acento esmeralda.
+   - Claro (:root[data-theme="light"]): fondo #f5f7f8, superficies blancas,
+     mismo acento esmeralda; rampas REMAPEADAS por tema — cada paso conserva su
+     semántica de contraste (300-500 textos, 700-900 bordes/rellenos), así los
+     componentes no cambian. El data-theme lo estampa el script inline del root
+     layout ANTES del primer paint (localStorage 'theme' o prefers-color-scheme);
+     sin atributo se cae al oscuro.
+   - El sidebar/nav y el login NO siguen el tema: usan los scopes .sidebar-scope
+     y .nocturne-violet de abajo, que re-anclan los tokens localmente. */
 
 :root {
-  /* Los controles nativos (listas de <select>, calendario de <input type=date>,
-     scrollbars, autofill) deben renderizarse en oscuro; sin esto el navegador
-     usa el fondo claro del sistema y el texto claro del tema queda ilegible. */
+  /* Controles nativos (listas de <select>, calendario de <input type=date>,
+     scrollbars, autofill) siguen el tema; sin esto el navegador usa el fondo
+     claro del SO y el texto del tema queda ilegible. */
   color-scheme: dark;
 
   --color-bg: #161826;
   --color-surface: #232532;
   --color-text: #e9e9ed;
-  --color-accent: #9184d9;
-  --color-accent-2: #a7a1db;
+  /* Acento esmeralda: --color-accent es el rol de línea/texto/borde (calibrado
+     al fondo de cada tema); --accent-fill es el relleno de marca (botones
+     primarios, badges) constante en ambos temas, con --color-on-accent encima. */
+  --color-accent: #10b981;
+  --color-accent-2: #34d399;
+  --accent-fill: #059669;
+  --accent-fill-hover: #047857;
+  --color-on-accent: #ffffff;
   --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
 
-  /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
-     same step of any role matches the others in visual value. */
+  /* Rampas tonales — misma escala de valor perceptual por rol; en cada tema el
+     paso conserva su distancia de contraste respecto al fondo. */
   --color-neutral-100: #f3f5fe;
   --color-neutral-200: #e4e7f5;
   --color-neutral-300: #cfd3e5;
@@ -25,29 +43,42 @@
   --color-neutral-800: #3f424d;
   --color-neutral-900: #292b31;
 
-  --color-accent-100: #f5f4ff;
-  --color-accent-200: #e7e5fe;
-  --color-accent-300: #d2cefd;
-  --color-accent-400: #b5abfc;
-  --color-accent-500: #968ae0;
-  --color-accent-600: #796cbf;
-  --color-accent-700: #5d5294;
-  --color-accent-800: #423a6a;
-  --color-accent-900: #2b2741;
+  --color-accent-100: #eafaf3;
+  --color-accent-200: #cff2e2;
+  --color-accent-300: #a5e6cb;
+  --color-accent-400: #6fd6ac;
+  --color-accent-500: #2fbf8d;
+  --color-accent-600: #12a377;
+  --color-accent-700: #0e7f5e;
+  --color-accent-800: #0c5943;
+  --color-accent-900: #0b3d2f;
 
-  --color-accent-2-100: #f5f4ff;
-  --color-accent-2-200: #e7e5fe;
-  --color-accent-2-300: #d2cefd;
-  --color-accent-2-400: #b5afe8;
-  --color-accent-2-500: #9690c9;
-  --color-accent-2-600: #7972a9;
-  --color-accent-2-700: #5c5783;
-  --color-accent-2-800: #423e5d;
-  --color-accent-2-900: #2b293a;
+  /* Esquema mono: accent-2 espeja al acento (ver readme del DS). */
+  --color-accent-2-100: #eafaf3;
+  --color-accent-2-200: #cff2e2;
+  --color-accent-2-300: #a5e6cb;
+  --color-accent-2-400: #6fd6ac;
+  --color-accent-2-500: #2fbf8d;
+  --color-accent-2-600: #12a377;
+  --color-accent-2-700: #0e7f5e;
+  --color-accent-2-800: #0c5943;
+  --color-accent-2-900: #0b3d2f;
 
+  /* Herencia del DS para decks/presentaciones — SIN uso en la app y sin
+     remap claro; no usar en interfaz. */
   --color-section: #262a60;
   --color-section-glow: #353b80;
   --color-section-ghost: #4c5397;
+
+  /* Sidebar y nav móvil: superficie de marca, oscura en AMBOS temas (mockup). */
+  --sidebar: #182229;
+  --sidebar-2: #1f2c34;
+
+  --card-border: transparent;
+  /* Base de los velos de modal (los componentes la mezclan con transparencia):
+     tinta oscura en ambos temas — un velo blanco no oscurece nada. */
+  --scrim-base: #292b31;
+  --scrollbar-thumb: #3f424d;
 
   --font-heading: var(--font-inter), system-ui, sans-serif;
   --font-heading-weight: 500;
@@ -67,6 +98,95 @@
   --shadow-sm: 0 0 0 1px #3f424d;
   --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0,0,0,0.55);
   --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0,0,0,0.65);
+}
+
+/* ── Tema claro (mockup: contenido claro + acento esmeralda) ──────────────── */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --color-bg: #f5f7f8;
+  --color-surface: #ffffff;
+  --color-text: #101a21;
+  /* Rol de texto/línea en #047857 (5.1:1 sobre #f5f7f8, AA en texto pequeño);
+     el esmeralda #059669 del mockup vive en --accent-fill para rellenos. */
+  --color-accent: #047857;
+  --color-accent-2: #047857;
+  --color-divider: color-mix(in srgb, #101a21 14%, transparent);
+  --scrim-base: #101a21;
+  --scrollbar-thumb: #c3ccd3;
+
+  /* Rampa neutral remapeada (valores del mockup): 300-500 son textos (oscuros
+     sobre claro), 700-900 bordes y rellenos (claros). */
+  --color-neutral-100: #ffffff;
+  --color-neutral-200: #fafbfc;
+  --color-neutral-300: #33424c;
+  --color-neutral-400: #5a6a75;
+  --color-neutral-500: #66727e; /* mockup: #7b8892 (3.4:1) — oscurecido a 4.5:1 AA */
+  --color-neutral-600: #9fabb4;
+  --color-neutral-700: #dde3e7;
+  --color-neutral-800: #e9edf0;
+  --color-neutral-900: #ffffff;
+
+  /* Rampa de acento remapeada (200/300/600-900 del mockup; 100/400/500
+     derivados con la misma semántica): 100-300 textos verdes oscuros,
+     600/700 rellenos de progreso, 800/900 tintes claros de fondo. */
+  --color-accent-100: #065f46;
+  --color-accent-200: #047857;
+  --color-accent-300: #047857;
+  --color-accent-400: #10b981;
+  --color-accent-500: #059669;
+  --color-accent-600: #10b981;
+  --color-accent-700: #34d399;
+  --color-accent-800: #cdeee0;
+  --color-accent-900: #e7f6ef;
+
+  --color-accent-2-100: #065f46;
+  --color-accent-2-200: #047857;
+  --color-accent-2-300: #047857;
+  --color-accent-2-400: #10b981;
+  --color-accent-2-500: #059669;
+  --color-accent-2-600: #10b981;
+  --color-accent-2-700: #34d399;
+  --color-accent-2-800: #cdeee0;
+  --color-accent-2-900: #e7f6ef;
+
+  --card-border: #e9edf0;
+
+  --shadow-sm: 0 1px 2px rgba(16,26,33,.06);
+  --shadow-md: 0 1px 3px rgba(16,26,33,.07);
+  --shadow-lg: 0 18px 48px -18px rgba(16,26,33,.28);
+}
+
+/* ── Scope del sidebar/nav: oscuro en ambos temas ─────────────────────────
+   Re-ancla los pasos que los componentes del shell ya usan, calibrados al
+   fondo #182229 — así el markup existente (border-neutral-800, text-accent-200,
+   bg-accent-900...) resuelve bien dentro del sidebar sin reescrituras. */
+.sidebar-scope {
+  color-scheme: dark;
+  --color-text: #e8edf0;
+  --color-accent: #34d399;
+  --color-neutral-300: #cfd8dd;
+  --color-neutral-400: #8b9aa3;
+  --color-neutral-500: #7d8f9a;
+  --color-neutral-700: #35434c;
+  --color-neutral-800: #243039;
+  --color-accent-200: #7be0bb;
+  --color-accent-800: #059669;
+  --color-accent-900: #0e3b2e;
+  --color-divider: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Scope del login: paleta violeta original congelada (el usuario pidió no
+   tocar la pantalla de inicio de sesión durante la migración de tema). ───── */
+.nocturne-violet {
+  color-scheme: dark;
+  --color-bg: #161826;
+  --color-surface: #232532;
+  --color-text: #e9e9ed;
+  --color-accent: #9184d9;
+  --color-accent-300: #d2cefd;
+  --color-neutral-300: #cfd3e5;
+  --color-neutral-400: #b2b6ca;
 }
 
 body {
@@ -128,9 +248,14 @@ figcaption {
 }
 .btn svg { display: block; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary { color: var(--color-accent); border-color: var(--color-accent); }
-.btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
-.btn-primary:active { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+/* Primario RELLENO (mockup de la migración; antes era outlined). */
+.btn-primary {
+  color: var(--color-on-accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+}
+.btn-primary:hover { background: var(--accent-fill-hover); border-color: var(--accent-fill-hover); }
+.btn-primary:active { background: var(--accent-fill-hover); border-color: var(--accent-fill-hover); }
 .btn-secondary { border-color: var(--color-divider); }
 .btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .btn-secondary:active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
@@ -190,8 +315,10 @@ select option, select optgroup {
 /* — cards — */
 .card {
   display: flex; flex-direction: column; gap: var(--space-2);
-  padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface);
+  padding: var(--space-3); border-radius: 12px; background: var(--color-surface);
+  border: 1px solid var(--card-border);
 }
+:root[data-theme='light'] .card { box-shadow: var(--shadow-sm); }
 .card-kicker { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent); }
 .card-title {
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
@@ -215,6 +342,8 @@ select option, select optgroup {
 .tag-accent { background: var(--color-accent-800); color: var(--color-accent-100); }
 .tag-accent-2 { background: var(--color-accent-2-800); color: var(--color-accent-2-100); }
 .tag-neutral { background: var(--color-neutral-800); color: var(--color-neutral-100); }
+/* En claro, neutral-100 es blanco (relleno) — el texto del tag toma el paso de texto. */
+:root[data-theme='light'] .tag-neutral { color: var(--color-neutral-300); }
 .tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
 
 /* — navigation — */
@@ -264,7 +393,7 @@ select option, select optgroup {
 .dialog-backdrop {
   position: fixed; inset: 0; display: grid; place-items: center;
   padding: var(--space-4);
-  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  background: color-mix(in srgb, var(--scrim-base) 50%, transparent);
 }
 .dialog {
   width: min(440px, 100%); display: flex; flex-direction: column; gap: var(--space-3);

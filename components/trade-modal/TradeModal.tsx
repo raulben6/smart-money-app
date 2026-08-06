@@ -680,7 +680,7 @@ export function TradeModal(props: TradeModalProps) {
           position: fixed; inset: 0; z-index: 60;
           display: flex; align-items: flex-start; justify-content: center;
           padding: 44px 20px; overflow: auto;
-          background: color-mix(in oklab, var(--color-neutral-900) 72%, transparent);
+          background: color-mix(in oklab, var(--scrim-base) 72%, transparent);
           backdrop-filter: blur(3px);
         }
         .trademodal-dialog {

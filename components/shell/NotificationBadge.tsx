@@ -18,7 +18,7 @@ export function NotificationBadge({ count, className = '' }: { count: number; cl
   return (
     <span
       aria-label={`${count} sin leer`}
-      className={`flex h-[17px] min-w-[17px] items-center justify-center rounded-[9px] bg-accent-800 px-[5px] text-[10px] leading-none text-accent-200 ${className}`}
+      className={`flex h-[17px] min-w-[17px] items-center justify-center rounded-[9px] bg-accent-fill px-[5px] text-[10px] leading-none text-on-accent ${className}`}
     >
       {count}
     </span>

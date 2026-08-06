@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import { SquaresFour, ArrowsLeftRight, Target, Medal, EnvelopeSimple, UserPlus, type Icon } from '@phosphor-icons/react'
 import { Brand } from './Brand'
+import { ThemeToggle } from './ThemeToggle'
 
 /**
  * `matchPrefixes`: rutas adicionales que también marcan el item como activo. Solo
@@ -26,7 +27,7 @@ export function MentorSidebar({ name, initials }: { name: string; initials: stri
   const pathname = usePathname()
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-[22px] border-r border-neutral-800 px-[14px] py-[20px] lg:flex">
+    <aside className="sidebar-scope sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-[22px] bg-sidebar px-[14px] py-[20px] lg:flex">
       <Brand />
 
       <nav aria-label="Navegación principal" className="flex flex-col gap-0.5">
@@ -63,6 +64,7 @@ export function MentorSidebar({ name, initials }: { name: string; initials: stri
             <span className="text-[10.5px] text-neutral-500">Mentor</span>
           </div>
         </div>
+        <ThemeToggle />
         <UserButton appearance={{ elements: { avatarBox: 'h-6 w-6' } }} />
       </div>
     </aside>

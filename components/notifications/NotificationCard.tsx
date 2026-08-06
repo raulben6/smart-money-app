@@ -88,7 +88,7 @@ export function NotificationCard({
       className="card"
       style={{
         padding: '15px 17px',
-        borderLeft: `2px solid ${unread ? 'var(--color-accent-700)' : 'transparent'}`,
+        borderLeft: `2px solid ${unread ? 'var(--color-accent)' : 'transparent'}`,
       }}
     >
       <div className="flex items-start gap-[13px]">

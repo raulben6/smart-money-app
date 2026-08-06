@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import { ChartLineUp, CalendarBlank, Bell, Plus, type Icon } from '@phosphor-icons/react'
 import { NotificationBadge } from './NotificationBadge'
+import { ThemeToggle } from './ThemeToggle'
 
 /** Nav inferior móvil (<1024px). */
 export function BottomNav({ unreadCount }: { unreadCount: number }) {
@@ -14,7 +15,7 @@ export function BottomNav({ unreadCount }: { unreadCount: number }) {
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-800 bg-bg pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="sidebar-scope fixed inset-x-0 bottom-0 z-20 border-t border-neutral-800 bg-sidebar pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <div className="flex h-14 items-center justify-around">
         <NavItem href="/dashboard" label="Dashboard" Icon={ChartLineUp} active={isActive('/dashboard')} />
@@ -38,7 +39,8 @@ export function BottomNav({ unreadCount }: { unreadCount: number }) {
           badgeCount={unreadCount}
         />
 
-        <div className="flex h-full items-center">
+        <div className="flex h-full items-center gap-[10px]">
+          <ThemeToggle />
           <UserButton appearance={{ elements: { avatarBox: 'h-7 w-7' } }} />
         </div>
       </div>

@@ -3,7 +3,9 @@ import authBg from './auth-bg.jpg'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative min-h-dvh">
+    // .nocturne-violet congela aquí la paleta original: el login no sigue el
+    // tema claro/oscuro de la app (decisión del usuario en la migración).
+    <div className="nocturne-violet relative min-h-dvh">
       <Image
         src={authBg}
         alt=""

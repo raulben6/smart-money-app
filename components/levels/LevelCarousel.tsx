@@ -17,7 +17,7 @@ export function LevelCarousel({ status }: { status: LevelStatus }) {
         const isDone = state === 'completado'
         const isCurrent = state === 'en_curso'
 
-        const stateColor = isDone ? 'var(--pos)' : isCurrent ? 'var(--color-accent-200)' : 'var(--color-neutral-600)'
+        const stateColor = isDone ? 'var(--pos)' : isCurrent ? 'var(--color-accent-200)' : 'var(--color-neutral-500)'
         const stateText = isDone ? 'Completado' : isCurrent ? `En curso · ${Math.round(status.progressPct)}%` : 'Bloqueado'
         const goalText = level.manualUnlock ? level.name : `Generar ${money(level.goalAmount)}`
 
