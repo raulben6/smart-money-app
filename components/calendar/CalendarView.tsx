@@ -33,17 +33,6 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
 }
 
 /**
- * Datos del banner de nivel (Task 15): el `LevelStatus` ya calculado + `netPnl` real del
- * estudiante. `netPnl` viaja SEPARADO de `status` (en vez de derivarse de
- * `status.progressPct`, ver hallazgo de revisión abajo) porque `progressPct` está topado
- * en [0, 100] — reconstruir el monto que falta a partir de ese % topado entiende un
- * `netPnl` negativo como 0 y subestima drásticamente cuánto falta. `lib/metrics/levels.ts`
- * no se toca (no expone `netPnl` en `LevelStatus`): el caller (`app/(app)/calendario/page.tsx`)
- * ya tiene los trades y calcula `computeSummary(...).netPnl` por su cuenta.
- */
-type LevelBannerData = { status: LevelStatus; netPnl: number }
-
-/**
  * Banner de nivel sobre el calendario del ESTUDIANTE (mockup líneas 194-215): badge del
  * nivel EN CURSO (`status.next` — siempre 'en_curso' según `computeLevelStatus`), su
  * 'Objetivo del nivel: ...' en variante COMPACTA ('generar {money}', sin los demás gates —
@@ -53,9 +42,16 @@ type LevelBannerData = { status: LevelStatus; netPnl: number }
  * Nivel X' — SOLO se mencionan los gates que de verdad faltan, derivados de los propios
  * `requirements` del nivel en curso (`focus.requirements`, por label):
  *
- * - Dinero: `Math.max(0, next.goalAmount - netPnl)` con el `netPnl` REAL (nunca
- *   reconstruido desde `progressPct`, ver `LevelBannerData` arriba) — correcto también con
- *   `netPnl` negativo (p. ej. -$500 contra una meta de $1,000 → faltan $1,500).
+ * - Dinero: `status.missingAmount`/`status.progressAmount`, ya calculados por
+ *   `computeLevelStatus` con la regla de consumo secuencial (cada nivel arranca su meta
+ *   desde cero al completar el anterior — decisión del usuario, ver
+ *   `lib/metrics/levels.ts`). ANTES este componente recibía el `netPnl` real por separado y
+ *   hacía su propia aritmética (`next.goalAmount - netPnl`) porque `lib/metrics/levels.ts`
+ *   no exponía esos montos y `progressPct` topado en [0,100] no bastaba para reconstruirlos
+ *   sin distorsión con `netPnl` negativo; ahora que el motor expone `progressAmount`/
+ *   `missingAmount` ya correctos (acotados, sin cargar el dinero de niveles anteriores),
+ *   este componente ya no recibe `netPnl` ni recalcula nada — por eso `LevelBannerData` se
+ *   elimina y el prop de `CalendarView` pasa a ser el propio `LevelStatus`.
  * - Operaciones: se lee el requisito 'Operaciones mínimas' con forma 'X / Y' cuando no
  *   está `met` (esa comparación no está topada como `progressPct`, así que parsearla sigue
  *   siendo exacta).
@@ -67,7 +63,7 @@ type LevelBannerData = { status: LevelStatus; netPnl: number }
  * Si el alumno ya completó el último nivel (`status.next === null`), se muestra un
  * banner simple de felicitación en su lugar.
  */
-function LevelBanner({ status, netPnl }: LevelBannerData) {
+function LevelBanner({ status }: { status: LevelStatus }) {
   const next = status.next
 
   if (!next) {
@@ -87,7 +83,7 @@ function LevelBanner({ status, netPnl }: LevelBannerData) {
   if (!focus) return null
 
   const displayPct = Math.round(status.progressPct)
-  const missingMoney = Math.max(0, next.goalAmount - netPnl)
+  const missingMoney = status.missingAmount
 
   const tradesReq = focus.requirements.find((r) => r.label === 'Operaciones mínimas')
   const tradesMatch = tradesReq && !tradesReq.met ? tradesReq.value.match(/^(\d+) \/ (\d+)$/) : null
@@ -144,7 +140,7 @@ function LevelBanner({ status, netPnl }: LevelBannerData) {
       <div className="flex flex-1 flex-col gap-[7px]" style={{ minWidth: '220px' }}>
         <div className="flex text-[11.5px] text-neutral-500 tabular-nums">
           <span>
-            {money(netPnl)} de {money(next.goalAmount)}
+            {money(status.progressAmount)} de {money(next.goalAmount)}
           </span>
           <span className="ml-auto text-neutral-300">{displayPct}%</span>
         </div>
@@ -193,10 +189,10 @@ function LevelBanner({ status, netPnl }: LevelBannerData) {
  * `?nuevo=`, mes anterior/siguiente) para que funcionen igual bajo `/calendario` (alumno)
  * que bajo `/estudiantes/[id]/calendario` (mentor). `headerActions` es el hueco donde la
  * página mentor monta `StudentPicker` (Task 12) — `undefined` en las páginas de alumno, sin
- * efecto visual. `levelBanner` (Task 15) es `{ status, netPnl }` del ESTUDIANTE (ver
- * `LevelBannerData`), calculado por `app/(app)/calendario/page.tsx` — las páginas del
- * mentor nunca lo pasan, así que el banner de nivel solo puede aparecer combinado con
- * `!readOnly` (el mentor jamás lo ve, ni siquiera si algún día se le pasara por error).
+ * efecto visual. `levelBanner` (Task 15) es el `LevelStatus` del ESTUDIANTE, calculado por
+ * `app/(app)/calendario/page.tsx` con `computeLevelStatus` — las páginas del mentor nunca lo
+ * pasan, así que el banner de nivel solo puede aparecer combinado con `!readOnly` (el mentor
+ * jamás lo ve, ni siquiera si algún día se le pasara por error).
  */
 export function CalendarView({
   trades,
@@ -215,7 +211,7 @@ export function CalendarView({
   readOnly: boolean
   basePath: string
   headerActions?: ReactNode
-  levelBanner?: LevelBannerData
+  levelBanner?: LevelStatus
 }) {
   const { trade, nuevo, dia } = searchParams
   const { year, month } = resolveYearMonth(y, m)
@@ -249,7 +245,7 @@ export function CalendarView({
       </PageHeader>
 
       <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
-        {!readOnly && levelBanner ? <LevelBanner status={levelBanner.status} netPnl={levelBanner.netPnl} /> : null}
+        {!readOnly && levelBanner ? <LevelBanner status={levelBanner} /> : null}
 
         <div className="flex flex-wrap items-center gap-[14px]">
           <div className="flex items-center gap-[8px]">

@@ -23,13 +23,14 @@ export type StudentStats = {
   /** Rentabilidad sobre el capital inicial, en %; 0 si el estudiante no tiene `initialBalance` (aún no completó onboarding). */
   ret: number
   /**
-   * Nombre a mostrar en el tag de "Nivel" (mockup 358-375): el del nivel ACTUAL
-   * (`computeLevelStatus().current`) si ya completó alguno, o el del nivel que persigue
-   * (`.next`) si todavía no completó ninguno — el caso común. Antes mostraba el literal
-   * hardcodeado `'Nivel 1'` en ese caso, que queda obsoleto en cuanto el mentor renombra un
-   * nivel (`updateLevel`, ver `lib/actions/mentor.ts`); ahora siempre refleja el nombre real
-   * del nivel en la DB. `'—'` solo si no hay NINGÚN nivel definido (`current` y `next`
-   * ambos `null`, caso degenerado sin datos sembrados).
+   * Nombre a mostrar en el tag de "Nivel" (mockup 358-375): el del nivel EN CURSO
+   * (`computeLevelStatus().next`) — decisión de unificación de display (F2 smoke test,
+   * ver `lib/metrics/levels.ts`): TODAS las superficies (banner del calendario,
+   * `/mi-nivel`, este ranking) deben mostrar el mismo nivel "en curso", nunca el último
+   * completado. Si ya no hay `next` (completó el último nivel definido), cae a `.current`.
+   * Antes mostraba `.current ?? .next` (current primero) y, más atrás, el literal
+   * hardcodeado `'Nivel 1'`; ambos quedan derogados. `'—'` solo si no hay NINGÚN nivel
+   * definido (`next` y `current` ambos `null`, caso degenerado sin datos sembrados).
    */
   levelName: string
   /** Media de `riskPct` sobre los trades que lo tienen definido; `null` si ninguno lo tiene. */
@@ -90,7 +91,7 @@ export async function loadStudentStats(db: Db, mentorId: string): Promise<Studen
         summary,
         dd,
         ret,
-        levelName: levelStatus.current?.name ?? levelStatus.next?.name ?? '—',
+        levelName: levelStatus.next?.name ?? levelStatus.current?.name ?? '—',
         avgRiskPct,
         lastTradeDate,
         pfInfinite,

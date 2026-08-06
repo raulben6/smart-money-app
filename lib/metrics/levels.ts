@@ -42,6 +42,10 @@ export type LevelStatus = {
   current: LevelDef | null
   next: LevelDef | null
   progressPct: number
+  /** Dinero ganado DENTRO del nivel `next` (0 si no hay `next`). Ver `levelProgressAmount`. */
+  progressAmount: number
+  /** Dinero que falta para el nivel `next` (0 si no hay `next`). Puede exceder `next.goalAmount` con netPnl muy negativo — ver doc de `computeLevelStatus`. */
+  missingAmount: number
   perLevel: {
     level: LevelDef
     state: 'completado' | 'en_curso' | 'bloqueado'
@@ -66,8 +70,49 @@ function pfDisplay(profitFactor: number | null, grossLoss: number, grossProfit: 
   return grossLoss === 0 && grossProfit > 0 ? '∞' : '—'
 }
 
-function levelCompleted(level: LevelDef, summary: Summary, drawdown: number, grantedLevelIds: string[]): boolean {
-  if (summary.netPnl < level.goalAmount) return false
+/**
+ * Consumo secuencial de la meta monetaria — decisión del usuario en el smoke
+ * test (reemplaza los umbrales acumulativos del mockup, ver
+ * docs/superpowers/specs/2026-08-04-smart-money-fase-2-design.md): cada nivel
+ * exige ganar SU PROPIO goalAmount desde cero tras completar el anterior,
+ * como llenar cubos en cascada, en vez de comparar netPnl contra la suma de
+ * metas acumuladas desde siempre.
+ *
+ * `cumulativeGoal(N)` (uso interno, nunca expuesto) = suma de goalAmount de
+ * los niveles 1..N en orden de `position` — es el umbral REAL de netPnl para
+ * que el nivel N esté completo. Esta función devuelve, por id de nivel,
+ * `previousCumulative` (la suma EXCLUSIVA de los niveles anteriores — cuánto
+ * de netPnl "ya se consumió" antes de llegar a este nivel) y `cumulative`
+ * (la suma INCLUSIVE — el gate de completado de ESTE nivel).
+ */
+function cumulativeGoalsById(sorted: LevelDef[]): Map<string, { previousCumulative: number; cumulative: number }> {
+  const byId = new Map<string, { previousCumulative: number; cumulative: number }>()
+  let running = 0
+  for (const level of sorted) {
+    const previousCumulative = running
+    running += level.goalAmount
+    byId.set(level.id, { previousCumulative, cumulative: running })
+  }
+  return byId
+}
+
+/**
+ * Dinero "dentro del cubo" de este nivel: la porción de netPnl que le
+ * corresponde a ESTE nivel una vez restado lo ya consumido por los niveles
+ * anteriores (`previousCumulative`). Acotado por abajo en 0 (un netPnl por
+ * debajo del umbral anterior nunca resta) y por arriba en el propio
+ * `goalAmount` del nivel (un nivel nunca muestra más del 100% de SU meta —
+ * el excedente es lo que hace avanzar al SIGUIENTE nivel en la cascada, no
+ * a este). Se usa tanto para el requisito 'Ganancia del nivel' de
+ * CUALQUIER nivel (completado, en curso o bloqueado) como, cuando el nivel
+ * es `next`, para `LevelStatus.progressAmount`.
+ */
+function levelProgressAmount(level: LevelDef, previousCumulative: number, netPnl: number): number {
+  return Math.min(level.goalAmount, Math.max(0, netPnl - previousCumulative))
+}
+
+function levelCompleted(level: LevelDef, cumulativeGoal: number, summary: Summary, drawdown: number, grantedLevelIds: string[]): boolean {
+  if (summary.netPnl < cumulativeGoal) return false
   if (level.minProfitFactor !== null && !pfGateMet(level.minProfitFactor, summary.profitFactor, summary.grossLoss, summary.grossProfit)) {
     return false
   }
@@ -80,16 +125,18 @@ function levelCompleted(level: LevelDef, summary: Summary, drawdown: number, gra
 /** Un requisito por regla definida en el nivel — los niveles sin esa regla (null / false) no la listan. */
 function buildRequirements(
   level: LevelDef,
+  previousCumulative: number,
   summary: Summary,
   drawdown: number,
   grantedLevelIds: string[]
 ): { label: string; value: string; met: boolean }[] {
   const requirements: { label: string; value: string; met: boolean }[] = []
 
+  const rawProgress = summary.netPnl - previousCumulative
   requirements.push({
-    label: 'Ganancia acumulada',
-    value: `${money(summary.netPnl)} / ${money(level.goalAmount)}`,
-    met: summary.netPnl >= level.goalAmount,
+    label: 'Ganancia del nivel',
+    value: `${money(levelProgressAmount(level, previousCumulative, summary.netPnl))} / ${money(level.goalAmount)}`,
+    met: rawProgress >= level.goalAmount,
   })
 
   if (level.minProfitFactor !== null) {
@@ -136,8 +183,28 @@ function buildRequirements(
  * `current` = el nivel `completado` de mayor `position` (o null si ninguno).
  * `next` = el primer nivel por `position` posterior a `current` (o el de
  * menor `position` si `current` es null; o null si `current` es el último).
- * `progressPct` = avance hacia `next` (100 si no hay `next`, es decir, ya se
- * completó el último nivel).
+ *
+ * El gate de dinero es de CONSUMO SECUENCIAL (decisión del usuario): un
+ * nivel está completo cuando netPnl alcanza la suma acumulada de goalAmount
+ * de todos los niveles hasta el suyo inclusive (`cumulativeGoalsById`), pero
+ * lo que se MUESTRA como progreso de dinero de un nivel es solo la porción
+ * que le toca a ESE nivel (`levelProgressAmount`) — completar el Nivel 1 en
+ * $500 muestra al Nivel 2 arrancando en $0, no en $500. Los demás gates
+ * (PF/trades/drawdown/manualUnlock) son sobre la cuenta completa, sin
+ * cambios.
+ *
+ * `progressAmount`/`missingAmount` (nuevos, top-level) resumen el dinero del
+ * nivel `next` para que los consumidores no repitan esta aritmética:
+ * `progressAmount` = `levelProgressAmount(next, ...)` (acotado en
+ * [0, next.goalAmount]); `missingAmount` = `next.goalAmount - rawProgress`
+ * (con `rawProgress` SIN acotar por abajo) acotado solo en 0 — por eso SÍ
+ * puede exceder `next.goalAmount` cuando netPnl es muy negativo (ej. -$300
+ * contra una meta de $500 → faltan $800, no $500), pero nunca es negativo
+ * en el caso patológico contrario (el dinero de `next` ya está cubierto de
+ * sobra pero el nivel sigue bloqueado por otro gate — ver test "(e)").
+ * `progressPct` = `progressAmount / next.goalAmount * 100` (100 si no hay
+ * `next`, ambos montos en top-level son 0 en ese caso: no hay nivel "en
+ * curso" del que mostrar dinero).
  */
 export function computeLevelStatus(input: {
   trades: TradePoint[]
@@ -152,10 +219,12 @@ export function computeLevelStatus(input: {
   const drawdown = maxDrawdownPct(balances)
 
   const sorted = [...levels].sort((a, b) => a.position - b.position)
+  const cumulativeGoals = cumulativeGoalsById(sorted)
 
   const completedById = new Map<string, boolean>()
   for (const level of sorted) {
-    completedById.set(level.id, levelCompleted(level, summary, drawdown, grantedLevelIds))
+    const { cumulative } = cumulativeGoals.get(level.id)!
+    completedById.set(level.id, levelCompleted(level, cumulative, summary, drawdown, grantedLevelIds))
   }
 
   let current: LevelDef | null = null
@@ -166,7 +235,16 @@ export function computeLevelStatus(input: {
   const currentPosition = current?.position ?? -Infinity
   const next = sorted.find((level) => level.position > currentPosition) ?? null
 
-  const progressPct = next === null ? 100 : next.goalAmount > 0 ? Math.min(100, Math.max(0, (summary.netPnl / next.goalAmount) * 100)) : 100
+  let progressAmount = 0
+  let missingAmount = 0
+  let progressPct = 100
+  if (next !== null) {
+    const { previousCumulative } = cumulativeGoals.get(next.id)!
+    const rawProgress = summary.netPnl - previousCumulative
+    progressAmount = levelProgressAmount(next, previousCumulative, summary.netPnl)
+    missingAmount = Math.max(0, next.goalAmount - rawProgress)
+    progressPct = next.goalAmount > 0 ? Math.min(100, (progressAmount / next.goalAmount) * 100) : 100
+  }
 
   const perLevel = sorted.map((level) => {
     const completed = completedById.get(level.id) ?? false
@@ -175,8 +253,9 @@ export function computeLevelStatus(input: {
       : next !== null && level.id === next.id
         ? 'en_curso'
         : 'bloqueado'
-    return { level, state, requirements: buildRequirements(level, summary, drawdown, grantedLevelIds) }
+    const { previousCumulative } = cumulativeGoals.get(level.id)!
+    return { level, state, requirements: buildRequirements(level, previousCumulative, summary, drawdown, grantedLevelIds) }
   })
 
-  return { current, next, progressPct, perLevel }
+  return { current, next, progressPct, progressAmount, missingAmount, perLevel }
 }

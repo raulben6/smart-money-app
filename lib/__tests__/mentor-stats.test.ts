@@ -213,11 +213,11 @@ describe('loadStudentStats (integración con DB)', () => {
       .returning()
 
     // Renombrar Nivel 1 y Nivel 2 (sembrados por la migración) para poder distinguir, en
-    // las aserciones de abajo, "levelName == nombre REAL del nivel completado" (current)
-    // de "levelName == nombre REAL del nivel que persigue" (next, fix del hallazgo del
-    // reviewer) de "levelName == el literal 'Nivel 1' hardcodeado que el fallback usaba
-    // ANTES del fix" — con los nombres originales, las tres ramas producirían textos
-    // indistinguibles por coincidencia.
+    // las aserciones de abajo, "levelName == nombre REAL del nivel EN CURSO" (next, la
+    // semántica vigente tras la unificación de display F2) de "levelName == nombre REAL
+    // del nivel ya completado" (current, la semántica ANTERIOR que quedó derogada) de
+    // "levelName == el literal 'Nivel 1' hardcodeado" (fallback aún más viejo) — con los
+    // nombres originales, las tres ramas producirían textos indistinguibles por coincidencia.
     await db.update(levels).set({ name: 'Bronce' }).where(eq(levels.position, 1))
     await db.update(levels).set({ name: 'Plata' }).where(eq(levels.position, 2))
 
@@ -250,7 +250,7 @@ describe('loadStudentStats (integración con DB)', () => {
     expect(a.summary.winRate).toBe(70)
     expect(a.summary.profitFactor).toBe(5)
     expect(a.ret).toBe(80) // 800 / 1000 * 100
-    expect(a.levelName).toBe('Bronce') // current = Nivel 1 completado (NO 'Plata', que es `next`: current gana sobre next)
+    expect(a.levelName).toBe('Plata') // next = Nivel 2 en curso (NO 'Bronce', que es `current`: next gana sobre current, decisión de unificación de display F2)
     expect(a.avgRiskPct).toBe(1.75) // media de [2, 1.5] — ignora los 8 trades sin riskPct
     expect(a.lastTradeDate).toBe('2026-07-10')
     expect(a.pfInfinite).toBe(false) // tiene pérdidas -> profitFactor numérico, no infinito
@@ -262,9 +262,10 @@ describe('loadStudentStats (integración con DB)', () => {
     expect(b.summary.total).toBe(0)
     expect(b.summary.profitFactor).toBeNull()
     expect(b.ret).toBe(0)
-    // Sin trades -> current=null -> fallback a next (fix del hallazgo): next = Nivel 1 (el
-    // de menor position) = 'Bronce', NUNCA el literal 'Nivel 1' que el código hardcodeaba
-    // antes del fix (habría quedado obsoleto en cuanto el mentor lo renombró arriba).
+    // Sin trades -> next = Nivel 1 (el de menor position) = 'Bronce' (current es null, así
+    // que next gana igual bajo la nueva semántica); NUNCA el literal 'Nivel 1' que el
+    // código hardcodeaba en un fallback aún más viejo (habría quedado obsoleto en cuanto
+    // el mentor lo renombró arriba).
     expect(b.levelName).toBe('Bronce')
     expect(b.avgRiskPct).toBeNull()
     expect(b.lastTradeDate).toBeNull()
