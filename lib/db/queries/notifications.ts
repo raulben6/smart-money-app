@@ -1,8 +1,46 @@
-import { and, count, desc, eq, isNull } from 'drizzle-orm'
+import { and, count, desc, eq, gte, isNull, lte, type SQL } from 'drizzle-orm'
 import { notifications, trades, users, type DbNotification } from '@/lib/db/schema'
 import type { Db } from '@/lib/db/queries/trades'
 import { isMentor, isStudent } from '@/lib/db/queries/mentor'
 import type { FeedbackFormValues } from '@/lib/validation/mentor'
+
+/** `opts.limit` por defecto para `listNotificationsForUser`/`listSentNotifications`
+ * (smoke-test de escala: 500+ estudiantes, 1000+ mensajes — sin paginación, cualquiera de
+ * las dos listas completas sería una respuesta enorme). `MAX_LIMIT` topa tanto un `limit`
+ * hostil pasado directamente a la query como el `?limite=` de la URL de cada página (ver
+ * `parseLimit` en cada `page.tsx`) — defensa en profundidad, esta capa no confía en que el
+ * caller ya haya topado el valor. */
+const DEFAULT_LIMIT = 50
+const MAX_LIMIT = 500
+
+/** Entero positivo entre 1 y `MAX_LIMIT`; si falta o no tiene esa forma, `DEFAULT_LIMIT`. */
+function normalizeLimit(limit: number | undefined): number {
+  if (typeof limit !== 'number' || !Number.isInteger(limit) || limit <= 0) return DEFAULT_LIMIT
+  return Math.min(limit, MAX_LIMIT)
+}
+
+/**
+ * Condiciones de rango de fechas sobre `notifications.createdAt` para `desde`/`hasta`
+ * ('YYYY-MM-DD', ya validados por el caller — ver `parseDateParam` en cada `page.tsx`; esta
+ * capa no revalida el formato). `desde`/`hasta` faltantes no agregan condición (rango
+ * abierto de ese lado).
+ *
+ * APROXIMACIÓN DE ZONA HORARIA (deliberada, documentada a pedido del smoke-test): `desde`/
+ * `hasta` son fechas de calendario SIN hora ni offset; `new Date('YYYY-MM-DDT00:00:00')` /
+ * `new Date('YYYY-MM-DDT23:59:59.999')` los interpreta en la hora LOCAL DEL SERVIDOR (donde
+ * corre este proceso Node), mientras que `notifications.createdAt` se guarda en UTC. Para
+ * un usuario en una zona horaria distinta a la del servidor, el límite de "todo el día X"
+ * puede desplazarse algunas horas (p. ej. un mensaje de las 23:30 hora del usuario podría
+ * caer del lado del día siguiente si el servidor corre varias horas adelantado). Aceptable
+ * para un filtro de rango aproximado en un centro de notificaciones — NO para un reporte
+ * contable que necesite el corte exacto del día calendario del usuario.
+ */
+function dateRangeConditions(desde: string | undefined, hasta: string | undefined): SQL[] {
+  const conditions: SQL[] = []
+  if (desde) conditions.push(gte(notifications.createdAt, new Date(`${desde}T00:00:00`)))
+  if (hasta) conditions.push(lte(notifications.createdAt, new Date(`${hasta}T23:59:59.999`)))
+  return conditions
+}
 
 /**
  * Crea una notificación dirigida a `values.userId`; `null` si `mentorId` no es mentor
@@ -46,6 +84,15 @@ export async function insertNotification(
 /** Notificación con el `tradeDate`/`asset` (nullable) del trade referenciado, si lo hay. */
 export type NotificationWithTrade = DbNotification & { tradeDate: string | null; asset: string | null }
 
+/** Filtros opcionales de `listNotificationsForUser`/`listSentNotifications` — `desde`/`hasta`
+ * 'YYYY-MM-DD' (ver `dateRangeConditions`), `limit` (ver `normalizeLimit`). */
+export type NotificationListOptions = { desde?: string; hasta?: string; limit?: number }
+
+/** `hasMore`: `true` si existen más filas que las devueltas en `items` (más allá de
+ * `limit`/`DEFAULT_LIMIT`) — pedir `limit + 1` filas y descartar la última es más simple y
+ * barato que un `count()` aparte solo para saber si hay una página siguiente. */
+export type NotificationListResult<T> = { items: T[]; hasMore: boolean }
+
 /**
  * Notificaciones de `userId`, más recientes primero. Sin gate de rol: cada uno lee las
  * suyas. LEFT JOIN (no INNER) contra `trades` para traer `tradeDate`/`asset` junto con
@@ -55,16 +102,33 @@ export type NotificationWithTrade = DbNotification & { tradeDate: string | null;
  * ver `feedbackSchema`) y además tiene `onDelete: 'set null'`: si el trade se borrara más
  * adelante, la notificación debe seguir apareciendo (sin el botón), no desaparecer de la
  * lista por culpa de un INNER JOIN.
+ *
+ * `opts.desde`/`opts.hasta`/`opts.limit` (smoke-test de escala): filtro de rango de fechas
+ * (ver `dateRangeConditions`, incluye la nota de aproximación de zona horaria) + paginación
+ * simple `limit`+1 (ver `NotificationListResult`). Sin `opts`, se comporta como antes salvo
+ * el tope implícito de `DEFAULT_LIMIT` filas (antes devolvía la lista completa sin límite).
  */
-export async function listNotificationsForUser(db: Db, userId: string): Promise<NotificationWithTrade[]> {
+export async function listNotificationsForUser(
+  db: Db,
+  userId: string,
+  opts: NotificationListOptions = {},
+): Promise<NotificationListResult<NotificationWithTrade>> {
+  const limit = normalizeLimit(opts.limit)
+
   const rows = await db
     .select({ notification: notifications, tradeDate: trades.tradeDate, asset: trades.asset })
     .from(notifications)
     .leftJoin(trades, eq(notifications.tradeId, trades.id))
-    .where(eq(notifications.userId, userId))
+    .where(and(eq(notifications.userId, userId), ...dateRangeConditions(opts.desde, opts.hasta)))
     .orderBy(desc(notifications.createdAt))
+    .limit(limit + 1)
 
-  return rows.map((r) => ({ ...r.notification, tradeDate: r.tradeDate ?? null, asset: r.asset ?? null }))
+  const hasMore = rows.length > limit
+  const items = rows
+    .slice(0, limit)
+    .map((r) => ({ ...r.notification, tradeDate: r.tradeDate ?? null, asset: r.asset ?? null }))
+
+  return { items, hasMore }
 }
 
 /** Marca como leídas todas las notificaciones no leídas de `userId`; devuelve el número de filas afectadas. */
@@ -88,21 +152,46 @@ export async function unreadCountForUser(db: Db, userId: string): Promise<number
   return row?.total ?? 0
 }
 
+/** Filtros de `listSentNotifications` — igual que `NotificationListOptions` más `studentId`
+ * (destinatario exacto; sin este filtro, todos los estudiantes). */
+export type SentNotificationListOptions = NotificationListOptions & { studentId?: string }
+
 /**
- * Todas las notificaciones enviadas, con el nombre del estudiante destinatario (join
- * con `users`); `[]` si `mentorId` no es mentor. Modelo de mentor único: todas las
- * notificaciones existentes fueron enviadas por el mentor, así que no hace falta
- * filtrar por remitente (la tabla no tiene esa columna) — igual que `listStudents`
- * lista a todos los estudiantes sin distinguir "quién los invitó".
+ * Notificaciones enviadas, con el nombre del estudiante destinatario (join con `users`);
+ * `{ items: [], hasMore: false }` si `mentorId` no es mentor. Modelo de mentor único: todas
+ * las notificaciones existentes fueron enviadas por el mentor, así que no hace falta
+ * filtrar por remitente (la tabla no tiene esa columna) — igual que `listStudents` lista a
+ * todos los estudiantes sin distinguir "quién los invitó".
+ *
+ * `opts.studentId`/`opts.desde`/`opts.hasta`/`opts.limit` (smoke-test de escala): mismo
+ * filtro de rango de fechas y paginación `limit`+1 que `listNotificationsForUser` (ver su
+ * doc, incluida la nota de aproximación de zona horaria), más un filtro exacto por
+ * destinatario. `studentId` NO se valida aquí (ni que tenga forma de UUID, ni que sea
+ * estudiante) — un id con forma inválida o de un no-estudiante simplemente no calza con
+ * ningún `notifications.userId` y la lista sale vacía; la validación de forma vive en la
+ * página (`isValidUuid`, ver `app/(mentor)/mensajes/page.tsx`).
  */
-export async function listSentNotifications(db: Db, mentorId: string): Promise<(DbNotification & { studentName: string })[]> {
-  if (!(await isMentor(db, mentorId))) return []
+export async function listSentNotifications(
+  db: Db,
+  mentorId: string,
+  opts: SentNotificationListOptions = {},
+): Promise<NotificationListResult<DbNotification & { studentName: string }>> {
+  if (!(await isMentor(db, mentorId))) return { items: [], hasMore: false }
+
+  const limit = normalizeLimit(opts.limit)
+  const conditions: SQL[] = dateRangeConditions(opts.desde, opts.hasta)
+  if (opts.studentId) conditions.push(eq(notifications.userId, opts.studentId))
 
   const rows = await db
     .select({ notification: notifications, studentName: users.name })
     .from(notifications)
     .innerJoin(users, eq(notifications.userId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(notifications.createdAt))
+    .limit(limit + 1)
 
-  return rows.map((r) => ({ ...r.notification, studentName: r.studentName }))
+  const hasMore = rows.length > limit
+  const items = rows.slice(0, limit).map((r) => ({ ...r.notification, studentName: r.studentName }))
+
+  return { items, hasMore }
 }

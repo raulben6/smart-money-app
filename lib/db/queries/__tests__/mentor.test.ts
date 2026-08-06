@@ -445,14 +445,14 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
     it('insertNotification(A, {...}) -> null (A no es mentor) y no crea ninguna fila', async () => {
       const id = await insertNotification(db, studentA.id, { userId: studentB.id, ...minimalFeedback })
       expect(id).toBeNull()
-      expect(await listNotificationsForUser(db, studentB.id)).toEqual([])
+      expect((await listNotificationsForUser(db, studentB.id)).items).toEqual([])
     })
 
     it('(f) insertNotification(mentor, {userId: A, ...}) -> id y aparece en listNotificationsForUser(A)', async () => {
       const id = await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback })
       expect(typeof id).toBe('string')
 
-      const paraA = await listNotificationsForUser(db, studentA.id)
+      const { items: paraA } = await listNotificationsForUser(db, studentA.id)
       expect(paraA).toHaveLength(1)
       expect(paraA[0].id).toBe(id)
       expect(paraA[0].title).toBe('Buen trabajo')
@@ -463,7 +463,7 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback, tradeId })
       await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback, title: 'Sin trade' })
 
-      const paraA = await listNotificationsForUser(db, studentA.id)
+      const { items: paraA } = await listNotificationsForUser(db, studentA.id)
       expect(paraA).toHaveLength(2)
 
       const conTrade = paraA.find((n) => n.tradeId === tradeId)
@@ -485,7 +485,7 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
 
     it('(f) listNotificationsForUser(B) no ve las notificaciones de A', async () => {
       await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback })
-      expect(await listNotificationsForUser(db, studentB.id)).toEqual([])
+      expect((await listNotificationsForUser(db, studentB.id)).items).toEqual([])
     })
 
     it('(f) markAllReadForUser(A) solo marca como leídas las de A y devuelve el número de filas afectadas', async () => {
@@ -496,10 +496,10 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       const afectadas = await markAllReadForUser(db, studentA.id)
       expect(afectadas).toBe(2)
 
-      const deA = await listNotificationsForUser(db, studentA.id)
+      const { items: deA } = await listNotificationsForUser(db, studentA.id)
       expect(deA.every((n) => n.readAt !== null)).toBe(true)
 
-      const deB = await listNotificationsForUser(db, studentB.id)
+      const { items: deB } = await listNotificationsForUser(db, studentB.id)
       expect(deB[0].readAt).toBeNull()
     })
 
@@ -540,7 +540,7 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       expect(original.title).toBe('Original de B')
       expect(original.userId).toBe(studentB.id)
 
-      const deA = await listNotificationsForUser(db, studentA.id)
+      const { items: deA } = await listNotificationsForUser(db, studentA.id)
       expect(deA).toHaveLength(1)
       expect(deA[0].id).toBe(nuevoId)
     })
@@ -549,13 +549,78 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback })
       await insertNotification(db, mentor.id, { userId: studentB.id, ...minimalFeedback, title: 'Para B' })
 
-      const enviadas = await listSentNotifications(db, mentor.id)
+      const { items: enviadas } = await listSentNotifications(db, mentor.id)
       expect(enviadas).toHaveLength(2)
       const porEstudiante = new Map(enviadas.map((n) => [n.userId, n.studentName]))
       expect(porEstudiante.get(studentA.id)).toBe('Estudiante A')
       expect(porEstudiante.get(studentB.id)).toBe('Estudiante B')
 
-      expect(await listSentNotifications(db, studentA.id)).toEqual([])
+      expect((await listSentNotifications(db, studentA.id)).items).toEqual([])
+    })
+
+    // --- smoke-test de escala: filtros de fecha/estudiante + paginación limit/hasMore ---
+
+    it('listNotificationsForUser(desde/hasta) filtra por rango de fechas de creación (createdAt insertado directamente, fuera de insertNotification)', async () => {
+      const dentro = new Date('2026-08-15T10:00:00Z')
+      const antes = new Date('2026-07-01T10:00:00Z')
+      const despues = new Date('2026-09-15T10:00:00Z')
+
+      await db.insert(notifications).values({ userId: studentA.id, kind: 'felicitacion', title: 'Dentro', body: '...', createdAt: dentro })
+      await db.insert(notifications).values({ userId: studentA.id, kind: 'felicitacion', title: 'Antes', body: '...', createdAt: antes })
+      await db.insert(notifications).values({ userId: studentA.id, kind: 'felicitacion', title: 'Después', body: '...', createdAt: despues })
+
+      const { items } = await listNotificationsForUser(db, studentA.id, { desde: '2026-08-01', hasta: '2026-08-31' })
+      expect(items.map((n) => n.title)).toEqual(['Dentro'])
+    })
+
+    it('listSentNotifications(desde/hasta) filtra por rango; (studentId) filtra por destinatario; ambos combinados', async () => {
+      const dentro = new Date('2026-08-15T10:00:00Z')
+      const fuera = new Date('2026-01-01T10:00:00Z')
+
+      await db.insert(notifications).values({ userId: studentA.id, kind: 'felicitacion', title: 'A dentro', body: '...', createdAt: dentro })
+      await db.insert(notifications).values({ userId: studentB.id, kind: 'felicitacion', title: 'B dentro', body: '...', createdAt: dentro })
+      await db.insert(notifications).values({ userId: studentA.id, kind: 'felicitacion', title: 'A fuera', body: '...', createdAt: fuera })
+
+      const { items: enRango } = await listSentNotifications(db, mentor.id, { desde: '2026-08-01', hasta: '2026-08-31' })
+      expect(enRango.map((n) => n.title).sort()).toEqual(['A dentro', 'B dentro'])
+
+      const { items: soloA } = await listSentNotifications(db, mentor.id, { studentId: studentA.id })
+      expect(soloA.map((n) => n.title).sort()).toEqual(['A dentro', 'A fuera'])
+
+      const { items: soloADentro } = await listSentNotifications(db, mentor.id, {
+        studentId: studentA.id,
+        desde: '2026-08-01',
+        hasta: '2026-08-31',
+      })
+      expect(soloADentro.map((n) => n.title)).toEqual(['A dentro'])
+    })
+
+    it('listNotificationsForUser respeta `limit` y expone `hasMore`', async () => {
+      for (let i = 0; i < 5; i++) {
+        await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback, title: `N${i}` })
+      }
+
+      const pagina = await listNotificationsForUser(db, studentA.id, { limit: 3 })
+      expect(pagina.items).toHaveLength(3)
+      expect(pagina.hasMore).toBe(true)
+
+      const todas = await listNotificationsForUser(db, studentA.id, { limit: 10 })
+      expect(todas.items).toHaveLength(5)
+      expect(todas.hasMore).toBe(false)
+    })
+
+    it('listSentNotifications respeta `limit` y expone `hasMore`', async () => {
+      for (let i = 0; i < 5; i++) {
+        await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback, title: `N${i}` })
+      }
+
+      const pagina = await listSentNotifications(db, mentor.id, { limit: 3 })
+      expect(pagina.items).toHaveLength(3)
+      expect(pagina.hasMore).toBe(true)
+
+      const todas = await listSentNotifications(db, mentor.id, { limit: 10 })
+      expect(todas.items).toHaveLength(5)
+      expect(todas.hasMore).toBe(false)
     })
   })
 })
