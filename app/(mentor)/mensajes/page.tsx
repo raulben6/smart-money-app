@@ -85,27 +85,15 @@ export default async function MensajesPage({
       <PageHeader title="Mensajes enviados" subtitle="Retroalimentación que le has dejado a tus estudiantes" />
 
       <div className="flex flex-col gap-[16px] px-[30px] pt-[26px] pb-[60px]" style={{ maxWidth: '840px' }}>
-        <form
-          method="GET"
-          className="card"
-          style={{
-            padding: '14px 18px',
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'flex-end',
-            columnGap: '16px',
-            rowGap: '10px',
-          }}
-        >
-          <div className="flex flex-col gap-[4px]">
-            <label htmlFor="mensajes-estudiante" className="text-[11px] text-neutral-400">
+        <form method="GET" className="flex flex-wrap items-center gap-[10px]">
+          <div className="flex items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px]">
+            <label htmlFor="mensajes-estudiante" className="text-[11px] text-neutral-500">
               Estudiante
             </label>
             <select
               id="mensajes-estudiante"
               name="e"
-              className="input"
-              style={{ width: 'auto', minWidth: '200px' }}
+              className="border-0 bg-transparent text-text text-[12px] outline-none"
               defaultValue={studentId ?? ''}
             >
               <option value="">Todos los estudiantes</option>
@@ -116,40 +104,38 @@ export default async function MensajesPage({
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-[4px]">
-            <label htmlFor="mensajes-desde" className="text-[11px] text-neutral-400">
+          <div className="flex items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px]">
+            <label htmlFor="mensajes-desde" className="text-[11px] text-neutral-500">
               Desde
             </label>
             <input
               id="mensajes-desde"
               type="date"
               name="desde"
-              className="input"
-              style={{ width: '150px' }}
+              className="border-0 bg-transparent text-text text-[12px] outline-none"
+              style={{ width: '130px' }}
               defaultValue={desde ?? ''}
             />
           </div>
-          <div className="flex flex-col gap-[4px]">
-            <label htmlFor="mensajes-hasta" className="text-[11px] text-neutral-400">
+          <div className="flex items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px]">
+            <label htmlFor="mensajes-hasta" className="text-[11px] text-neutral-500">
               Hasta
             </label>
             <input
               id="mensajes-hasta"
               type="date"
               name="hasta"
-              className="input"
-              style={{ width: '150px' }}
+              className="border-0 bg-transparent text-text text-[12px] outline-none"
+              style={{ width: '130px' }}
               defaultValue={hasta ?? ''}
             />
           </div>
-          <div className="flex items-center gap-[8px]" style={{ marginLeft: 'auto' }}>
-            <button type="submit" className="btn btn-secondary text-[12px]">
-              Filtrar
-            </button>
-            <Link href="/mensajes" className="btn btn-ghost text-[12px]">
-              Limpiar
-            </Link>
-          </div>
+          <button type="submit" className="btn btn-secondary" style={{ fontSize: '12px', padding: '7px 12px' }}>
+            Filtrar
+          </button>
+          <Link href="/mensajes" className="btn btn-ghost" style={{ fontSize: '12px', padding: '7px 12px' }}>
+            Limpiar
+          </Link>
         </form>
 
         <span className="text-[12px] text-neutral-500">{totalTexto}</span>
