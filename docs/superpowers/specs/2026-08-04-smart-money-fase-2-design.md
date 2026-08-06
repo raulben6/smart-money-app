@@ -13,7 +13,7 @@ El mentor supervisa a todos los estudiantes del programa: panel general con rank
 | Decisión | Elección |
 | --- | --- |
 | Alcance | Fase 2 completa en un solo plan |
-| Designación del mentor | `MENTOR_EMAIL` en Vercel (= `kb2813085@gmail.com`); promoción automática al iniciar sesión |
+| Designación del mentor | `MENTOR_EMAIL` en Vercel (= `raulbenitez1606@gmail.com`); promoción automática al iniciar sesión |
 | Niveles | 5 precargados del mockup, editables por el mentor desde la app |
 | Invitaciones | Desde la app (API backend de Clerk); el mentor no usa el dashboard de Clerk |
 | Vistas por alumno | Reutilizar páginas existentes vía `/estudiantes/[id]/...` — cero duplicación |
