@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createTrade, removeTrade, updateTrade } from '@/lib/actions/trades'
 import { uploadCapture } from '@/lib/actions/captures'
 import { formatLongDate } from '@/lib/format'
+import { FeedbackSection } from './FeedbackSection'
 import { EMOTIONS, PHASES } from '@/lib/emotions'
 import {
   DATOS_FIELDS,
@@ -134,6 +135,11 @@ type TradeModalProps = ({ mode: 'create'; defaultDate: string } | { mode: 'edit'
    * ambos call sites (obligatorio, no opcional) para que un caller nuevo no pueda olvidarlo
    * y dejar un modal editable abierto por accidente en un contexto de solo lectura. */
   readOnly: boolean
+  /** Id del estudiante dueño del trade — solo tiene sentido (y solo llega) junto con
+   * `readOnly: true` (modo mentor, Task 12): `ReadOnlyJournal` lo necesita para montar
+   * `FeedbackSection` (Task 16) con el destinatario correcto de `sendFeedback`.
+   * `undefined` en modo owner — el propio alumno viendo su trade nunca ve esa sección. */
+  studentId?: string
 }
 
 /**
@@ -159,7 +165,7 @@ export function TradeModal(props: TradeModalProps) {
   // Solo verdadero junto a `detail` en la práctica (ver doc de `TradeModalProps.readOnly`) —
   // `showReadOnlyJournal` más abajo revalida `detail !== undefined` de todos modos, sin
   // asumir esa invariante desde aquí.
-  const { readOnly } = props
+  const { readOnly, studentId } = props
 
   // Solo tiene sentido en modo editar: llega tras un `createTrade` exitoso cuyas capturas
   // fallaron al subir (ver `handleFinalSubmit`), que redirige aquí mismo con este query
@@ -643,7 +649,13 @@ export function TradeModal(props: TradeModalProps) {
   // redundante con `readOnly` en la práctica (ver doc de `TradeModalProps.readOnly`), pero se
   // revalida aquí para no asumir esa invariante.
   const journalSectionEl = readOnly && detail ? (
-    <ReadOnlyJournal journal={detail.journal} captures={detail.captures} hidden={!showBitacora} />
+    <ReadOnlyJournal
+      journal={detail.journal}
+      captures={detail.captures}
+      hidden={!showBitacora}
+      tradeId={detail.id}
+      studentId={studentId}
+    />
   ) : (
     <JournalSection
       ref={journalRef}
@@ -880,10 +892,17 @@ function ReadOnlyJournal({
   journal,
   captures,
   hidden,
+  tradeId,
+  studentId,
 }: {
   journal: JournalFormState
   captures: ExistingCapture[]
   hidden: boolean
+  tradeId: string
+  /** `undefined` solo en teoría (ver doc de `TradeModalProps.studentId`) — se revalida
+   * aquí de todos modos, mismo criterio defensivo que el resto de este componente, en vez
+   * de asumir la invariante "readOnly implica studentId definido". */
+  studentId: string | undefined
 }) {
   // `v` de cache-busting para las imágenes de captura (mismo motivo que `CaptureSlot`, ver su
   // doc): sin él, el cache del navegador/CDN de `get()` podría servir bytes de una re-subida
@@ -963,7 +982,7 @@ function ReadOnlyJournal({
         })}
       </div>
 
-      {/* F2-T16: FeedbackSection del mentor (retroalimentación sobre este trade) va aquí. */}
+      {studentId ? <FeedbackSection studentId={studentId} tradeId={tradeId} /> : null}
     </section>
   )
 }

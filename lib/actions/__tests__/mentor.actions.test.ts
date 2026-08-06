@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { createTestDb, type TestDb } from '@/lib/db/__tests__/helpers'
 import { users, goals, levels, manualLevelGrants, notifications, type DbUser } from '@/lib/db/schema'
+import { insertTradeWithJournal } from '@/lib/db/queries/trades'
+import type { TradeFormValues } from '@/lib/validation/trade'
 import type { GoalFormValues, LevelFormValues, FeedbackFormValues } from '@/lib/validation/mentor'
 import {
   sendFeedback,
@@ -73,10 +75,35 @@ const minimalFeedback: FeedbackFormValues = {
   tradeId: null,
 }
 
+const minimalTrade: TradeFormValues = {
+  tradeDate: '2026-08-01',
+  asset: 'AAPL',
+  market: 'acciones',
+  direction: 'long',
+  entryTime: null,
+  exitTime: null,
+  entryPrice: null,
+  exitPrice: null,
+  contracts: null,
+  positionSize: null,
+  stopLoss: null,
+  takeProfit: null,
+  riskUsd: null,
+  riskPct: null,
+  pnlUsd: 100,
+  rMultiple: null,
+  setup: '',
+  timeframe: '',
+  marketConditions: null,
+  entryType: null,
+  confirmations: null,
+}
+
 async function seedMentorAndStudent(db: TestDb) {
   const [mentor] = await db.insert(users).values({ clerkId: 'clerk_mentor', role: 'mentor', name: 'Mentor M' }).returning()
   const [studentA] = await db.insert(users).values({ clerkId: 'clerk_a', role: 'student', name: 'Estudiante A' }).returning()
-  return { mentor, studentA }
+  const [studentB] = await db.insert(users).values({ clerkId: 'clerk_b', role: 'student', name: 'Estudiante B' }).returning()
+  return { mentor, studentA, studentB }
 }
 
 // La migración 0001 siembra 5 niveles (positions 1-5); se leen los ya
@@ -90,13 +117,13 @@ async function getLevelByPosition(db: TestDb, position: number) {
 
 describe('lib/actions/mentor', () => {
   let db: TestDb
-  let mentor: DbUser, studentA: DbUser
+  let mentor: DbUser, studentA: DbUser, studentB: DbUser
 
   beforeEach(async () => {
     db = await createTestDb()
     useTestDb(db)
     mockAuthAs(null)
-    ;({ mentor, studentA } = await seedMentorAndStudent(db))
+    ;({ mentor, studentA, studentB } = await seedMentorAndStudent(db))
   })
 
   describe('gate de requireMentor (un estudiante nunca ejecuta estas actions)', () => {
@@ -206,6 +233,36 @@ describe('lib/actions/mentor', () => {
       expect(row.title).toBe('Buen trabajo')
       expect(row.kind).toBe('felicitacion')
       expect(row.readAt).toBeNull()
+    })
+
+    it('tradeId de un trade que SÍ pertenece al estudiante destinatario -> ok:true', async () => {
+      mockAuthAs(mentor)
+      const tradeIdDeA = await insertTradeWithJournal(db, studentA.id, minimalTrade)
+
+      const result = await sendFeedback(studentA.id, { ...minimalFeedback, tradeId: tradeIdDeA })
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('unreachable')
+      const [row] = await db.select().from(notifications).where(eq(notifications.id, result.data.id))
+      expect(row.tradeId).toBe(tradeIdDeA)
+    })
+
+    // SEGURIDAD (hallazgo del revisor de Task 9, controller-asignado a esta Task 16):
+    // `insertNotification` por sí sola no verifica que `tradeId` pertenezca al estudiante
+    // destinatario — solo que el trade exista. Este test cubre justo el caso que ese gate
+    // por sí solo no detectaría: un tradeId real, pero de OTRO estudiante.
+    it('tradeId de un trade de OTRO estudiante (studentB) al enviar feedback a studentA -> ok:false SIN_PERMISO, sin crear la notificación', async () => {
+      mockAuthAs(mentor)
+      const tradeIdDeB = await insertTradeWithJournal(db, studentB.id, minimalTrade)
+
+      const result = await sendFeedback(studentA.id, { ...minimalFeedback, tradeId: tradeIdDeB })
+
+      expect(result.ok).toBe(false)
+      if (result.ok) throw new Error('unreachable')
+      expect(result.error).toBe(SIN_PERMISO)
+
+      const rows = await db.select().from(notifications).where(eq(notifications.userId, studentA.id))
+      expect(rows).toEqual([])
     })
   })
 

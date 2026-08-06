@@ -9,6 +9,7 @@ import { isValidUuid } from '@/lib/validation/uuid'
 import { goalSchema, levelSchema, feedbackSchema, inviteSchema } from '@/lib/validation/mentor'
 import { insertGoal, updateGoalById, deleteGoalById } from '@/lib/db/queries/goals'
 import { updateLevelById, grantLevel, revokeGrant } from '@/lib/db/queries/levels'
+import { getTradeDetailForStudent } from '@/lib/db/queries/mentor'
 import { insertNotification } from '@/lib/db/queries/notifications'
 import type { ActionResult } from './types'
 
@@ -41,12 +42,25 @@ export async function sendFeedback(studentId: string, raw: unknown): Promise<Act
 
   try {
     const db = getDb()
-    // `insertNotification` valida mentor/estudiante y devuelve `null` si alguno
-    // de los dos falla. Pero si `parsed.data.tradeId` tiene forma de UUID válida
-    // y NO corresponde a ningún trade real, la FK `notifications.trade_id` hace
-    // que el INSERT lance en vez de devolver `null` — ese caso cae al catch de
-    // abajo como ERROR_INESPERADO (documentado: no se puede distinguir de un
-    // error genérico de base de datos sin una consulta extra de existencia).
+
+    // SEGURIDAD (hallazgo del revisor de Task 9, controller-asignado a esta Task 16):
+    // `insertNotification` valida mentor/estudiante pero NO verifica que `tradeId`
+    // pertenezca al estudiante DESTINATARIO (`studentId`) — solo que el trade exista, vía
+    // la FK `notifications.trade_id`. Sin este chequeo, un mentor podría (por error o a
+    // propósito) adjuntar el id de un trade de OTRO estudiante a la notificación de este.
+    // Se reusa `getTradeDetailForStudent` (la misma consulta que ya autoriza el modal de
+    // solo lectura del mentor, Task 12): exige mentor+dueño+trade en una sola query, así
+    // que un `tradeId` que no pertenezca a `studentId` (o que no exista) se rechaza aquí
+    // como SIN_PERMISO antes de intentar el INSERT — lo que también vuelve inalcanzable el
+    // caso, documentado antes en este comentario, de un `tradeId` con forma de UUID válida
+    // pero inexistente reventando la FK y cayendo al catch como ERROR_INESPERADO.
+    if (parsed.data.tradeId !== null) {
+      const trade = await getTradeDetailForStudent(db, mentor.id, studentId, parsed.data.tradeId)
+      if (!trade) {
+        return { ok: false, error: SIN_PERMISO }
+      }
+    }
+
     const id = await insertNotification(db, mentor.id, { userId: studentId, ...parsed.data })
     if (!id) {
       return { ok: false, error: SIN_PERMISO }

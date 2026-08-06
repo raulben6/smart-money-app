@@ -63,3 +63,33 @@ export function formatLongDate(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number)
   return `${day} de ${MONTH_NAMES_ES[month - 1].toLowerCase()}, ${year}`
 }
+
+/**
+ * Tiempo relativo en español para el centro de notificaciones (mockup 774-780):
+ * relativeTime('2026-08-03T10:00:00Z', now) -> 'Hace 2 h'. `now` se inyecta (NUNCA
+ * `new Date()` interno) para mantener la función pura y testeable sin mockear el reloj.
+ * Acepta `Date` o un ISO string (lo que llega tal cual de Drizzle/JSON según el caller).
+ *
+ * Buckets, cada uno con el redondeo hacia abajo del anterior (60 * min no cuentan ya como
+ * "hora" hasta cumplir la hora completa, etc.): <60s 'Ahora'; <60min 'Hace N min'; <24h
+ * 'Hace N h'; exactamente 1 día 'Ayer' (mismo wording que el mockup, no 'Hace 1 día');
+ * 2-6 días 'Hace N días'; <4 semanas 'Hace N semana(s)'; en otro caso 'Hace N mes(es)'
+ * (mes ~30 días, aproximado — esta pantalla no necesita precisión calendario exacta).
+ */
+export function relativeTime(date: string | Date, now: Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  const diffSec = Math.max(0, Math.floor((now.getTime() - d.getTime()) / 1000))
+
+  if (diffSec < 60) return 'Ahora'
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `Hace ${diffMin} min`
+  const diffHour = Math.floor(diffMin / 60)
+  if (diffHour < 24) return `Hace ${diffHour} h`
+  const diffDay = Math.floor(diffHour / 24)
+  if (diffDay === 1) return 'Ayer'
+  if (diffDay < 7) return `Hace ${diffDay} días`
+  const diffWeek = Math.floor(diffDay / 7)
+  if (diffWeek < 4) return `Hace ${diffWeek} semana${diffWeek === 1 ? '' : 's'}`
+  const diffMonth = Math.floor(diffDay / 30)
+  return `Hace ${diffMonth} mes${diffMonth === 1 ? '' : 'es'}`
+}

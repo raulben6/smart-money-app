@@ -110,7 +110,17 @@ export async function TradeModalGate({
     // estado interno — form, paso/pestaña activa, errores) en una transición
     // `?trade=A` -> `?trade=B` en el historial; sin esto, React reconciliaría el mismo
     // `TradeModal` y dejaría el form de A pegado al abrir B. `readOnly` solo en modo mentor.
-    return <TradeModal key={plain.id} mode="edit" detail={plain} readOnly={viewer.mode === 'mentor'} />
+    // `studentId` (Task 16, `FeedbackSection`) solo se pasa en modo mentor — en modo owner
+    // queda `undefined`, ver doc de `TradeModalProps.studentId`.
+    return (
+      <TradeModal
+        key={plain.id}
+        mode="edit"
+        detail={plain}
+        readOnly={viewer.mode === 'mentor'}
+        studentId={viewer.mode === 'mentor' ? viewer.studentId : undefined}
+      />
+    )
   }
 
   // Un mentor nunca crea operaciones a nombre de su alumno: `?nuevo` se ignora por completo

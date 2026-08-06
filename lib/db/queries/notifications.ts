@@ -1,5 +1,5 @@
 import { and, count, desc, eq, isNull } from 'drizzle-orm'
-import { notifications, users, type DbNotification } from '@/lib/db/schema'
+import { notifications, trades, users, type DbNotification } from '@/lib/db/schema'
 import type { Db } from '@/lib/db/queries/trades'
 import { isMentor, isStudent } from '@/lib/db/queries/mentor'
 import type { FeedbackFormValues } from '@/lib/validation/mentor'
@@ -43,9 +43,28 @@ export async function insertNotification(
   return row.id
 }
 
-/** Notificaciones de `userId`, más recientes primero. Sin gate de rol: cada uno lee las suyas. */
-export async function listNotificationsForUser(db: Db, userId: string): Promise<DbNotification[]> {
-  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt))
+/** Notificación con el `tradeDate`/`asset` (nullable) del trade referenciado, si lo hay. */
+export type NotificationWithTrade = DbNotification & { tradeDate: string | null; asset: string | null }
+
+/**
+ * Notificaciones de `userId`, más recientes primero. Sin gate de rol: cada uno lee las
+ * suyas. LEFT JOIN (no INNER) contra `trades` para traer `tradeDate`/`asset` junto con
+ * cada notificación — la pantalla `/notificaciones` (Task 16) los necesita para el botón
+ * 'Ver operación · {asset} · {fecha}' sin una consulta extra por fila. LEFT, no INNER,
+ * porque `notifications.tradeId` es nullable (la mayoría de kinds no referencian un trade,
+ * ver `feedbackSchema`) y además tiene `onDelete: 'set null'`: si el trade se borrara más
+ * adelante, la notificación debe seguir apareciendo (sin el botón), no desaparecer de la
+ * lista por culpa de un INNER JOIN.
+ */
+export async function listNotificationsForUser(db: Db, userId: string): Promise<NotificationWithTrade[]> {
+  const rows = await db
+    .select({ notification: notifications, tradeDate: trades.tradeDate, asset: trades.asset })
+    .from(notifications)
+    .leftJoin(trades, eq(notifications.tradeId, trades.id))
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt))
+
+  return rows.map((r) => ({ ...r.notification, tradeDate: r.tradeDate ?? null, asset: r.asset ?? null }))
 }
 
 /** Marca como leídas todas las notificaciones no leídas de `userId`; devuelve el número de filas afectadas. */

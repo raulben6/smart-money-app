@@ -458,6 +458,23 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       expect(paraA[0].title).toBe('Buen trabajo')
     })
 
+    it('listNotificationsForUser trae tradeDate/asset del trade referenciado (LEFT JOIN); null si la notificación no referencia ninguno', async () => {
+      const tradeId = await insertTradeWithJournal(db, studentA.id, minimalTrade)
+      await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback, tradeId })
+      await insertNotification(db, mentor.id, { userId: studentA.id, ...minimalFeedback, title: 'Sin trade' })
+
+      const paraA = await listNotificationsForUser(db, studentA.id)
+      expect(paraA).toHaveLength(2)
+
+      const conTrade = paraA.find((n) => n.tradeId === tradeId)
+      expect(conTrade?.tradeDate).toBe(minimalTrade.tradeDate)
+      expect(conTrade?.asset).toBe(minimalTrade.asset)
+
+      const sinTrade = paraA.find((n) => n.tradeId === null)
+      expect(sinTrade?.tradeDate).toBeNull()
+      expect(sinTrade?.asset).toBeNull()
+    })
+
     it('insertNotification a un destinatario mentor -> null', async () => {
       expect(await insertNotification(db, mentor.id, { userId: mentor.id, ...minimalFeedback })).toBeNull()
     })
