@@ -17,7 +17,7 @@ import { GoalForm, type EditableGoal } from '@/components/mentor/GoalForm'
  * (esa ya la usa el grupo `(app)` del estudiante — colisión de rutas entre grupos).
  *
  * Selección de alumno en `?e=<id>` (mismo `StudentPicker` de Task 12, generalizado con
- * `hrefFor` — ver su doc) en vez de un segmento `[id]` de la URL, porque esta pantalla
+ * `queryPath` — ver su doc) en vez de un segmento `[id]` de la URL, porque esta pantalla
  * no tiene una subruta propia por alumno como `/estudiantes/[id]/dashboard|calendario`.
  * `?nuevo=1` abre `GoalForm` en modo crear; `?editar=<goalId>` en modo editar (el goal
  * debe pertenecer al alumno actualmente seleccionado — si no, se ignora, mismo patrón
@@ -88,7 +88,7 @@ export default async function ObjetivosEstudiantesPage({
           // no deben viajar al navegador del mentor en el payload RSC de otros alumnos).
           students={students.map((s) => ({ id: s.id, name: s.name }))}
           currentId={studentId}
-          hrefFor={(id) => `/objetivos-estudiantes?e=${id}`}
+          queryPath="/objetivos-estudiantes"
         />
         <Link href={`/objetivos-estudiantes?e=${studentId}&nuevo=1`} className="btn btn-primary" style={{ fontSize: '12px' }}>
           + Nuevo objetivo

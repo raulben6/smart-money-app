@@ -33,7 +33,7 @@ export default async function NivelesPage({ searchParams }: { searchParams: Prom
             // no deben viajar al navegador del mentor en el payload RSC de otros alumnos).
             students={students.map((s) => ({ id: s.id, name: s.name }))}
             currentId={studentId}
-            hrefFor={(id) => `/niveles?e=${id}`}
+            queryPath="/niveles"
           />
         ) : null}
       </PageHeader>
