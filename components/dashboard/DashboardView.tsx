@@ -99,7 +99,14 @@ export function DashboardView({
                 ? 'Sus métricas y curva de crecimiento aparecerán aquí en cuanto registre su primera operación.'
                 : 'Registra tu primera operación para ver tus métricas y tu curva de crecimiento aquí.'}
             </p>
-            {!readOnly && (
+            {readOnly ? (
+              // Sin trades, el enlace 'Ver calendario' normal de `RecentTrades` no se llega a
+              // renderizar (esa card ni existe en el estado vacío) — este es el único camino
+              // hacia el calendario del alumno desde aquí (fix de navegación, smoke test).
+              <Link href={calendarPath} className="btn btn-ghost" style={{ marginTop: '8px' }}>
+                Ver calendario
+              </Link>
+            ) : (
               <Link href={`${calendarPath}?nuevo=1`} className="btn btn-primary" style={{ marginTop: '8px' }}>
                 Registrar mi primera operación
               </Link>

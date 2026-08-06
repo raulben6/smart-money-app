@@ -5,6 +5,7 @@ import { isValidUuid } from '@/lib/validation/uuid'
 import { listTradesForStudent, listStudents, getStudentById } from '@/lib/db/queries/mentor'
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { StudentPicker } from '@/components/shell/StudentPicker'
+import { StudentViewTabs } from '@/components/shell/StudentViewTabs'
 import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
 
 /**
@@ -46,13 +47,16 @@ export default async function StudentCalendarioPage({
         readOnly
         basePath={basePath}
         headerActions={
-          <StudentPicker
-            // Solo id+nombre — nunca la fila completa (clerkId/role/initialBalance/createdAt no
-            // deben viajar al navegador del mentor en el payload RSC de otros alumnos).
-            students={students.map((s) => ({ id: s.id, name: s.name }))}
-            currentId={id}
-            subroute="calendario"
-          />
+          <>
+            <StudentViewTabs studentId={id} active="calendario" />
+            <StudentPicker
+              // Solo id+nombre — nunca la fila completa (clerkId/role/initialBalance/createdAt
+              // no deben viajar al navegador del mentor en el payload RSC de otros alumnos).
+              students={students.map((s) => ({ id: s.id, name: s.name }))}
+              currentId={id}
+              subroute="calendario"
+            />
+          </>
         }
       />
 
