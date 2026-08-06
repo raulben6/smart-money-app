@@ -16,7 +16,18 @@ const NAV_ITEMS = [
 ] as const
 
 /** Sidebar de escritorio (≥1024px). Ver mockup líneas 27-64. */
-export function Sidebar({ name, initials, unreadCount }: { name: string; initials: string; unreadCount: number }) {
+export function Sidebar({
+  name,
+  initials,
+  unreadCount,
+  levelName,
+}: {
+  name: string
+  initials: string
+  unreadCount: number
+  /** Nivel EN CURSO del estudiante, ya resuelto server-side (lib/level-status). */
+  levelName: string
+}) {
   const pathname = usePathname()
 
   return (
@@ -52,7 +63,7 @@ export function Sidebar({ name, initials, unreadCount }: { name: string; initial
           </div>
           <div className="flex min-w-0 flex-col leading-[1.25]">
             <span className="truncate text-[12px] text-text">{name}</span>
-            <span className="text-[10.5px] text-neutral-500">Nivel —</span>
+            <span className="truncate text-[10.5px] text-neutral-500">{levelName}</span>
           </div>
         </div>
         <UserButton appearance={{ elements: { avatarBox: 'h-6 w-6' } }} />
