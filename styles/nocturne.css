@@ -1,6 +1,11 @@
 /* Nocturne — design-system tokens and component classes. This file is the source of truth for the system's look; retune it here and see readme.md. */
 
 :root {
+  /* Los controles nativos (listas de <select>, calendario de <input type=date>,
+     scrollbars, autofill) deben renderizarse en oscuro; sin esto el navegador
+     usa el fondo claro del sistema y el texto claro del tema queda ilegible. */
+  color-scheme: dark;
+
   --color-bg: #161826;
   --color-surface: #232532;
   --color-text: #e9e9ed;
@@ -149,6 +154,12 @@ figcaption {
 .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
 textarea.input { min-height: 90px; resize: vertical; }
+/* Lista desplegada de cualquier <select>: fondo y texto del sistema, no del SO
+   (refuerzo de color-scheme para navegadores que sí estilan las opciones). */
+select option, select optgroup {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
 .radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
 .radio input, .seg-opt input {
   position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;

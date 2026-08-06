@@ -43,5 +43,8 @@ next-env.d.ts
 # superpowers
 .superpowers/
 
+# carpeta local del usuario con imagenes originales sin optimizar
+/Imagenes/
+
 .vercel
 .env*
