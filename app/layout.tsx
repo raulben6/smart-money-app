@@ -7,7 +7,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
-  title: 'Smart Money App',
+  title: 'Smart Trader Performance System',
   description: 'Diario de trading con mentoría',
 }
 

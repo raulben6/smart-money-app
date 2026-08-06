@@ -1,5 +1,4 @@
 import Image from 'next/image'
-import { Brand } from '@/components/shell/Brand'
 import authBg from './auth-bg.jpg'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -30,9 +29,17 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       />
       <div className="relative grid min-h-dvh place-items-center p-6">
         <div className="flex w-full flex-col items-center gap-[22px]">
-          <div className="flex flex-col items-center gap-[6px]">
-            <Brand />
-            <p className="m-0 text-[12.5px] text-neutral-300">Diario de trading con mentoría</p>
+          {/* Marca tipográfica pura (propuesta A elegida por el usuario 2026-08-06). */}
+          <div className="flex flex-col items-center gap-[10px] text-center">
+            <span
+              className="text-[21px] uppercase tracking-[0.3em] text-text"
+              style={{ fontFamily: 'var(--font-heading)', fontWeight: 'var(--font-heading-weight)' }}
+            >
+              Smart Trader
+            </span>
+            <span aria-hidden className="h-px w-[46px] bg-accent" />
+            <span className="text-[10px] uppercase tracking-[0.42em] text-accent-300">Performance System</span>
+            <p className="m-0 mt-[2px] text-[12px] text-neutral-400">Diario de trading con mentoría</p>
           </div>
           {children}
         </div>

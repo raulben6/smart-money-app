@@ -1,4 +1,4 @@
-/** Marca "Smart Money App": rombo con glow de acento + wordmark. Ver mockup líneas 28-36. */
+/** Marca "Smart Trader Performance System": rombo con glow de acento + wordmark. Ver mockup líneas 28-36. */
 export function Brand() {
   return (
     <div className="flex items-center gap-[10px] px-2">
@@ -13,9 +13,9 @@ export function Brand() {
           className="text-[13.5px] tracking-[-0.01em] text-text"
           style={{ fontFamily: 'var(--font-heading)', fontWeight: 'var(--font-heading-weight)' }}
         >
-          Smart Money
+          Smart Trader
         </span>
-        <span className="text-[10px] uppercase tracking-[.12em] text-neutral-400">App</span>
+        <span className="text-[9px] uppercase tracking-[.14em] text-neutral-400">Performance System</span>
       </div>
     </div>
   )
