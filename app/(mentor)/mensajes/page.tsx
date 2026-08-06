@@ -40,7 +40,12 @@ function parseLimite(value: string | undefined): number {
  * ignora (equivale a "sin ese filtro"), nunca se deja pasar tal cual a la capa de datos.
  *
  * 'Cargar más' es un `Link` (no un botón con JS) que preserva los filtros vigentes y sube
- * `limite` en `PAGE_SIZE` — mismo patrón sin-JS que el resto de este filtro.
+ * `limite` en `PAGE_SIZE` — mismo patrón sin-JS que el resto de este filtro. Deja de
+ * renderizarse en cuanto `limit` alcanza `MAX_LIMIT` (hallazgo de revisión): sin este
+ * corte, con `hasMore` todavía en `true` en ese punto, su `href` calcularía
+ * `Math.min(limit + PAGE_SIZE, MAX_LIMIT)` = el mismo `limit` actual — un enlace que
+ * apunta a la URL ya vigente, un callejón sin salida que parece un botón funcional pero
+ * no avanza. En su lugar, un aviso neutral explica por qué no hay más para cargar.
  */
 export default async function MensajesPage({
   searchParams,
@@ -80,10 +85,29 @@ export default async function MensajesPage({
       <PageHeader title="Mensajes enviados" subtitle="Retroalimentación que le has dejado a tus estudiantes" />
 
       <div className="flex flex-col gap-[16px] px-[30px] pt-[26px] pb-[60px]" style={{ maxWidth: '840px' }}>
-        <form method="GET" className="card flex flex-wrap items-end gap-[12px]" style={{ padding: '16px 18px' }}>
-          <div className="field" style={{ minWidth: '190px' }}>
-            <label htmlFor="mensajes-estudiante">Estudiante</label>
-            <select id="mensajes-estudiante" name="e" className="input" defaultValue={studentId ?? ''}>
+        <form
+          method="GET"
+          className="card"
+          style={{
+            padding: '14px 18px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-end',
+            columnGap: '16px',
+            rowGap: '10px',
+          }}
+        >
+          <div className="flex flex-col gap-[4px]">
+            <label htmlFor="mensajes-estudiante" className="text-[11px] text-neutral-400">
+              Estudiante
+            </label>
+            <select
+              id="mensajes-estudiante"
+              name="e"
+              className="input"
+              style={{ width: 'auto', minWidth: '200px' }}
+              defaultValue={studentId ?? ''}
+            >
               <option value="">Todos los estudiantes</option>
               {students.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -92,23 +116,43 @@ export default async function MensajesPage({
               ))}
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="mensajes-desde">Desde</label>
-            <input id="mensajes-desde" type="date" name="desde" className="input" defaultValue={desde ?? ''} />
+          <div className="flex flex-col gap-[4px]">
+            <label htmlFor="mensajes-desde" className="text-[11px] text-neutral-400">
+              Desde
+            </label>
+            <input
+              id="mensajes-desde"
+              type="date"
+              name="desde"
+              className="input"
+              style={{ width: '150px' }}
+              defaultValue={desde ?? ''}
+            />
           </div>
-          <div className="field">
-            <label htmlFor="mensajes-hasta">Hasta</label>
-            <input id="mensajes-hasta" type="date" name="hasta" className="input" defaultValue={hasta ?? ''} />
+          <div className="flex flex-col gap-[4px]">
+            <label htmlFor="mensajes-hasta" className="text-[11px] text-neutral-400">
+              Hasta
+            </label>
+            <input
+              id="mensajes-hasta"
+              type="date"
+              name="hasta"
+              className="input"
+              style={{ width: '150px' }}
+              defaultValue={hasta ?? ''}
+            />
           </div>
-          <button type="submit" className="btn btn-secondary text-[12px]">
-            Filtrar
-          </button>
-          <Link href="/mensajes" className="btn btn-ghost text-[12px]">
-            Limpiar
-          </Link>
+          <div className="flex items-center gap-[8px]" style={{ marginLeft: 'auto' }}>
+            <button type="submit" className="btn btn-secondary text-[12px]">
+              Filtrar
+            </button>
+            <Link href="/mensajes" className="btn btn-ghost text-[12px]">
+              Limpiar
+            </Link>
+          </div>
         </form>
 
-        <span className="text-[11.5px] text-neutral-500">{totalTexto}</span>
+        <span className="text-[12px] text-neutral-500">{totalTexto}</span>
 
         {enviados.length === 0 ? (
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
@@ -129,10 +173,15 @@ export default async function MensajesPage({
           </div>
         )}
 
-        {hasMore && (
+        {hasMore && limit < MAX_LIMIT && (
           <Link href={cargarMasHref} className="btn btn-ghost self-start text-[12px]">
             Cargar más
           </Link>
+        )}
+        {hasMore && limit >= MAX_LIMIT && (
+          <span className="text-[12px] text-neutral-500">
+            Mostrando los primeros {MAX_LIMIT} resultados — usa los filtros para acotar la búsqueda.
+          </span>
         )}
       </div>
     </>

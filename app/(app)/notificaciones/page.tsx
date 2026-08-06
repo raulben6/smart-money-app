@@ -32,7 +32,8 @@ function parseLimite(value: string | undefined): number {
  *
  * Filtro de fecha vía un `<form method="GET">` NATIVO (mismo patrón sin-JS que
  * `/mensajes`, ver su doc) — `desde`/`hasta` se validan aquí (regex de fecha) antes de
- * pasarlos a `listNotificationsForUser`.
+ * pasarlos a `listNotificationsForUser`. 'Cargar más' deja de renderizarse en `limit >=
+ * MAX_LIMIT` (mismo callejón-sin-salida evitado en `/mensajes`, ver su doc).
  *
  * `MarkAsRead` se monta SIEMPRE, sin importar los filtros vigentes: marca como leídas
  * TODAS las notificaciones del usuario (no solo las que calzan con el filtro actual) — el
@@ -67,6 +68,7 @@ export default async function NotificacionesPage({
   const cargarMasHref = `/notificaciones?${cargarMasParams.toString()}`
 
   const hayFiltros = Boolean(desde || hasta)
+  const totalTexto = `Mostrando ${notifications.length} notificación${notifications.length === 1 ? '' : 'es'}${hasMore ? ' · hay más' : ''}`
 
   return (
     <>
@@ -75,24 +77,53 @@ export default async function NotificacionesPage({
       <div className="flex flex-col gap-[18px] px-[30px] pt-[26px] pb-[60px]">
         <form
           method="GET"
-          className="card flex flex-wrap items-end gap-[12px]"
-          style={{ padding: '16px 18px', maxWidth: '840px' }}
+          className="card"
+          style={{
+            padding: '14px 18px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-end',
+            columnGap: '16px',
+            rowGap: '10px',
+          }}
         >
-          <div className="field">
-            <label htmlFor="notif-desde">Desde</label>
-            <input id="notif-desde" type="date" name="desde" className="input" defaultValue={desde ?? ''} />
+          <div className="flex flex-col gap-[4px]">
+            <label htmlFor="notif-desde" className="text-[11px] text-neutral-400">
+              Desde
+            </label>
+            <input
+              id="notif-desde"
+              type="date"
+              name="desde"
+              className="input"
+              style={{ width: '150px' }}
+              defaultValue={desde ?? ''}
+            />
           </div>
-          <div className="field">
-            <label htmlFor="notif-hasta">Hasta</label>
-            <input id="notif-hasta" type="date" name="hasta" className="input" defaultValue={hasta ?? ''} />
+          <div className="flex flex-col gap-[4px]">
+            <label htmlFor="notif-hasta" className="text-[11px] text-neutral-400">
+              Hasta
+            </label>
+            <input
+              id="notif-hasta"
+              type="date"
+              name="hasta"
+              className="input"
+              style={{ width: '150px' }}
+              defaultValue={hasta ?? ''}
+            />
           </div>
-          <button type="submit" className="btn btn-secondary text-[12px]">
-            Filtrar
-          </button>
-          <Link href="/notificaciones" className="btn btn-ghost text-[12px]">
-            Limpiar
-          </Link>
+          <div className="flex items-center gap-[8px]" style={{ marginLeft: 'auto' }}>
+            <button type="submit" className="btn btn-secondary text-[12px]">
+              Filtrar
+            </button>
+            <Link href="/notificaciones" className="btn btn-ghost text-[12px]">
+              Limpiar
+            </Link>
+          </div>
         </form>
+
+        <span className="text-[12px] text-neutral-500">{totalTexto}</span>
 
         {notifications.length === 0 ? (
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px', maxWidth: '840px' }}>
@@ -129,10 +160,15 @@ export default async function NotificacionesPage({
               </section>
             )}
 
-            {hasMore && (
+            {hasMore && limit < MAX_LIMIT && (
               <Link href={cargarMasHref} className="btn btn-ghost self-start text-[12px]">
                 Cargar más
               </Link>
+            )}
+            {hasMore && limit >= MAX_LIMIT && (
+              <span className="text-[12px] text-neutral-500">
+                Mostrando los primeros {MAX_LIMIT} resultados — usa los filtros para acotar la búsqueda.
+              </span>
             )}
           </>
         )}
