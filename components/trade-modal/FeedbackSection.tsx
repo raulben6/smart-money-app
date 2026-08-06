@@ -163,7 +163,15 @@ export function FeedbackSection({ studentId, tradeId }: { studentId: string; tra
       <div className="flex flex-wrap items-center gap-[10px]">
         <span className="text-[11.5px] text-neutral-500">Tu comentario llegará al estudiante al guardar</span>
         <div className="ml-auto flex items-center gap-[10px]">
-          {sent ? <span className="text-pos text-[12px]">Enviado ✓</span> : null}
+          {/* `aria-live="polite"` en un span SIEMPRE montado (no uno que aparece/desaparece
+              condicionalmente) — mismo patrón que `statusLabel` en `JournalSection.tsx:569-575`:
+              algunos lectores de pantalla no anuncian un nodo `aria-live` recién insertado en
+              el DOM, solo un CAMBIO de texto dentro de uno que ya estaba presente. Vacío
+              (`''`) cuando `sent` es falso no ocupa espacio visual, así que el layout no
+              cambia frente a la versión anterior condicional. */}
+          <span aria-live="polite" className="text-pos text-[12px]">
+            {sent ? 'Enviado ✓' : ''}
+          </span>
           <button type="button" onClick={handleSubmit} disabled={isPending} className="btn btn-primary text-[12px]">
             {isPending ? 'Enviando…' : 'Enviar retroalimentación'}
           </button>

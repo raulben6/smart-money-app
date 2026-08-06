@@ -43,7 +43,17 @@ describe('relativeTime', () => {
     expect(relativeTime(daysAgo(20), NOW)).toBe('Hace 2 semanas')
   })
 
+  // Regresión (hallazgo de revisión): el bucket de semanas se cortaba en `diffWeek < 4`
+  // (`diffWeek = floor(diffDay / 7)`), que llega a 4 ya en el día 28 — esos días caían al
+  // bucket de meses, donde `floor(diffDay / 30)` todavía da 0 -> 'Hace 0 meses'. El corte
+  // correcto es en días de calendario (`diffDay < 30`), no en semanas completas.
+  it('días 28-29 -> Hace 4 semanas (NO "Hace 0 meses")', () => {
+    expect(relativeTime(daysAgo(28), NOW)).toBe('Hace 4 semanas')
+    expect(relativeTime(daysAgo(29), NOW)).toBe('Hace 4 semanas')
+  })
+
   it('meses -> Hace N mes(es)', () => {
+    expect(relativeTime(daysAgo(30), NOW)).toBe('Hace 1 mes')
     expect(relativeTime(daysAgo(35), NOW)).toBe('Hace 1 mes')
     expect(relativeTime(daysAgo(70), NOW)).toBe('Hace 2 meses')
   })

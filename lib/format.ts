@@ -73,8 +73,15 @@ export function formatLongDate(iso: string): string {
  * Buckets, cada uno con el redondeo hacia abajo del anterior (60 * min no cuentan ya como
  * "hora" hasta cumplir la hora completa, etc.): <60s 'Ahora'; <60min 'Hace N min'; <24h
  * 'Hace N h'; exactamente 1 día 'Ayer' (mismo wording que el mockup, no 'Hace 1 día');
- * 2-6 días 'Hace N días'; <4 semanas 'Hace N semana(s)'; en otro caso 'Hace N mes(es)'
+ * 2-6 días 'Hace N días'; <30 días 'Hace N semana(s)'; en otro caso 'Hace N mes(es)'
  * (mes ~30 días, aproximado — esta pantalla no necesita precisión calendario exacta).
+ *
+ * El bucket de semanas se corta en `diffDay < 30` (días de calendario), NO en
+ * `diffWeek < 4` — hallazgo de revisión: `diffWeek = floor(diffDay / 7)` llega a 4 en
+ * diffDay=28, así que un corte en `diffWeek < 4` dejaba los días 28-29 caer al bucket de
+ * meses, donde `floor(diffDay / 30)` todavía da 0 -> 'Hace 0 meses'. Cortando en días en
+ * vez de semanas, esos dos días caen en 'Hace 4 semanas' (semanas completas, <30 días) y
+ * el bucket de meses solo se alcanza a partir del día 30, donde `diffMonth` ya es >= 1.
  */
 export function relativeTime(date: string | Date, now: Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
@@ -88,8 +95,10 @@ export function relativeTime(date: string | Date, now: Date): string {
   const diffDay = Math.floor(diffHour / 24)
   if (diffDay === 1) return 'Ayer'
   if (diffDay < 7) return `Hace ${diffDay} días`
-  const diffWeek = Math.floor(diffDay / 7)
-  if (diffWeek < 4) return `Hace ${diffWeek} semana${diffWeek === 1 ? '' : 's'}`
+  if (diffDay < 30) {
+    const diffWeek = Math.floor(diffDay / 7)
+    return `Hace ${diffWeek} semana${diffWeek === 1 ? '' : 's'}`
+  }
   const diffMonth = Math.floor(diffDay / 30)
   return `Hace ${diffMonth} mes${diffMonth === 1 ? '' : 'es'}`
 }
