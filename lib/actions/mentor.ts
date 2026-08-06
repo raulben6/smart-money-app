@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { clerkClient } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { requireMentor } from '@/lib/auth'
+import { getAppUrl } from '@/lib/app-url'
 import { getDb } from '@/lib/db'
 import { isValidUuid } from '@/lib/validation/uuid'
 import { goalSchema, levelSchema, feedbackSchema, inviteSchema } from '@/lib/validation/mentor'
@@ -249,6 +250,12 @@ function isDuplicateInvitationError(err: unknown): boolean {
  * Invita a un estudiante por correo a través de la API de invitaciones de Clerk
  * (nivel de instancia, no de organización: esta app no usa Organizations).
  * No testeada unitariamente (llamada de red real) — ver Task 17/18.
+ *
+ * `redirectUrl` es OBLIGATORIO en la práctica: sin él, el ticket de invitación no lleva el
+ * claim `rurl` y, tras aceptar el correo, el usuario queda varado en el portal de Clerk en
+ * vez de volver a esta app (hallazgo del smoke de Task 17, verificado en vivo inspeccionando
+ * el JWT del ticket). Se apunta a `/sign-up`: `<SignUp/>` (`app/(auth)/sign-up/[[...sign-up]]`)
+ * consume el ticket automáticamente vía el query param que Clerk anexa a `redirectUrl`.
  */
 export async function inviteStudent(raw: unknown): Promise<ActionResult<null>> {
   await requireMentor()
@@ -260,7 +267,11 @@ export async function inviteStudent(raw: unknown): Promise<ActionResult<null>> {
 
   try {
     const client = await clerkClient()
-    await client.invitations.createInvitation({ emailAddress: parsed.data.email, notify: true })
+    await client.invitations.createInvitation({
+      emailAddress: parsed.data.email,
+      notify: true,
+      redirectUrl: `${getAppUrl()}/sign-up`,
+    })
     return { ok: true, data: null }
   } catch (err) {
     if (isDuplicateInvitationError(err)) {
