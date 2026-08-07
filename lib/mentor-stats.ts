@@ -74,7 +74,14 @@ export async function loadStudentStats(db: Db, mentorId: string): Promise<Studen
       const summary = computeSummary(trades, initialBalance)
       const dd = maxDrawdownPct(equityPoints(trades, initialBalance).map((p) => p.balance))
       const ret = initialBalance ? (summary.netPnl / initialBalance) * 100 : 0
-      const levelStatus = computeLevelStatus({ trades, initialBalance, levels, grantedLevelIds })
+      const levelStatus = computeLevelStatus({
+        trades,
+        initialBalance,
+        levels,
+        grantedLevelIds,
+        startPosition: student.startLevelPosition,
+        baselineNet: student.levelBaselineNet,
+      })
 
       const risks = trades.map((t) => t.riskPct).filter((r): r is number => r !== null)
       const avgRiskPct = risks.length === 0 ? null : risks.reduce((a, b) => a + b, 0) / risks.length

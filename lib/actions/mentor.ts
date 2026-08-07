@@ -9,9 +9,10 @@ import { getDb } from '@/lib/db'
 import { isValidUuid } from '@/lib/validation/uuid'
 import { goalSchema, levelSchema, feedbackSchema, inviteSchema } from '@/lib/validation/mentor'
 import { insertGoal, updateGoalById, deleteGoalById } from '@/lib/db/queries/goals'
-import { updateLevelById, grantLevel, revokeGrant } from '@/lib/db/queries/levels'
-import { getTradeDetailForStudent } from '@/lib/db/queries/mentor'
+import { updateLevelById, grantLevel, revokeGrant, listLevels } from '@/lib/db/queries/levels'
+import { getTradeDetailForStudent, listTradesForStudent, setStudentStartLevel } from '@/lib/db/queries/mentor'
 import { insertNotification } from '@/lib/db/queries/notifications'
+import { levelSnapshot, notifyNewLevelUps } from '@/lib/level-notify'
 import type { ActionResult } from './types'
 
 const CAMPOS_INVALIDOS = 'Revisa los campos marcados'
@@ -157,6 +158,14 @@ export async function removeGoal(goalId: string): Promise<ActionResult<null>> {
 }
 
 /** Actualiza los parámetros de un nivel (meta, PF mínimo, trades mínimos, drawdown máximo). */
+/**
+ * LIMITACIÓN ACEPTADA (ronda 16, anotada por el revisor): si el mentor RELAJA
+ * una definición (baja la meta o un gate) y eso completa niveles de algunos
+ * estudiantes, NO se genera felicitación — el siguiente snapshot ya los ve
+ * completados. Barrer a todos los estudiantes en cada edición de definiciones
+ * sería costoso y felicitar por un cambio de vara es discutible; se documenta
+ * en vez de implementarse. Mismo criterio para trades previos al onboarding.
+ */
 export async function updateLevel(levelId: string, raw: unknown): Promise<ActionResult<null>> {
   const mentor = await requireMentor()
 
@@ -199,14 +208,70 @@ export async function grantStudentLevel(studentId: string, levelId: string): Pro
     // lance en vez de devolver `false` (mismo caso que `sendFeedback` arriba
     // con `tradeId` — ver nota del revisor de Task 9). Cae al catch como
     // ERROR_INESPERADO.
+    const before = await levelSnapshot(db, studentId)
     const ok = await grantLevel(db, mentor.id, studentId, levelId)
     if (!ok) {
       return { ok: false, error: SIN_PERMISO }
     }
+    // El desbloqueo manual puede COMPLETAR el nivel (es su último gate): el
+    // estudiante recibe la misma felicitación que si lo hubiera cruzado con
+    // trades (ronda 16).
+    await notifyNewLevelUps(db, studentId, before)
     revalidateLevelViews()
+    revalidatePath('/notificaciones')
     return { ok: true, data: null }
   } catch (err) {
     console.error('[grantStudentLevel]', err)
+    return { ok: false, error: ERROR_INESPERADO }
+  }
+}
+
+/**
+ * Asigna manualmente el nivel INICIAL de un estudiante (ronda 16): fija
+ * `startLevelPosition` y toma como baseline el netPnl actual del estudiante —
+ * el nivel asignado arranca desde cero en el momento de la asignación (regla
+ * de "el progreso regresa a 0", ver computeLevelStatus). A propósito NO
+ * genera felicitaciones: es una decisión administrativa, no un logro.
+ */
+export async function assignStudentLevel(studentId: string, raw: unknown): Promise<ActionResult<null>> {
+  const mentor = await requireMentor()
+
+  if (!isValidUuid(studentId)) {
+    return { ok: false, error: SIN_PERMISO }
+  }
+
+  const parsed = z.object({ position: z.number().int().min(1).max(99) }).safeParse(raw)
+  if (!parsed.success) {
+    return { ok: false, error: CAMPOS_INVALIDOS, fieldErrors: z.flattenError(parsed.error).fieldErrors }
+  }
+
+  try {
+    const db = getDb()
+
+    // La posición debe corresponder a un nivel definido del programa — un
+    // número inventado dejaría al estudiante en una escalera vacía.
+    const levels = await listLevels(db)
+    if (!levels.some((l) => l.position === parsed.data.position)) {
+      return { ok: false, error: CAMPOS_INVALIDOS, fieldErrors: { position: ['Ese nivel no existe'] } }
+    }
+
+    // Baseline = netPnl actual del estudiante (la query ya exige mentor+estudiante).
+    const trades = await listTradesForStudent(db, mentor.id, studentId)
+    const baselineNet = trades.reduce((sum, t) => sum + t.pnlUsd, 0)
+
+    const ok = await setStudentStartLevel(db, mentor.id, studentId, parsed.data.position, baselineNet)
+    if (!ok) {
+      return { ok: false, error: SIN_PERMISO }
+    }
+
+    revalidateLevelViews()
+    revalidatePath('/panel')
+    revalidatePath('/comparador')
+    revalidatePath('/calendario')
+    revalidatePath('/dashboard')
+    return { ok: true, data: null }
+  } catch (err) {
+    console.error('[assignStudentLevel]', err)
     return { ok: false, error: ERROR_INESPERADO }
   }
 }

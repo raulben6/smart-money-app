@@ -111,8 +111,11 @@ function levelProgressAmount(level: LevelDef, previousCumulative: number, netPnl
   return Math.min(level.goalAmount, Math.max(0, netPnl - previousCumulative))
 }
 
-function levelCompleted(level: LevelDef, cumulativeGoal: number, summary: Summary, drawdown: number, grantedLevelIds: string[]): boolean {
-  if (summary.netPnl < cumulativeGoal) return false
+/** `moneyNet`: netPnl efectivo para la escalera de dinero (netPnl - baselineNet
+ * cuando hay asignación manual; el netPnl completo en el caso normal). Los
+ * gates de PF/trades/drawdown siguen siendo sobre la cuenta completa (summary). */
+function levelCompleted(level: LevelDef, cumulativeGoal: number, summary: Summary, drawdown: number, grantedLevelIds: string[], moneyNet: number): boolean {
+  if (moneyNet < cumulativeGoal) return false
   if (level.minProfitFactor !== null && !pfGateMet(level.minProfitFactor, summary.profitFactor, summary.grossLoss, summary.grossProfit)) {
     return false
   }
@@ -128,14 +131,15 @@ function buildRequirements(
   previousCumulative: number,
   summary: Summary,
   drawdown: number,
-  grantedLevelIds: string[]
+  grantedLevelIds: string[],
+  moneyNet: number
 ): { label: string; value: string; met: boolean }[] {
   const requirements: { label: string; value: string; met: boolean }[] = []
 
-  const rawProgress = summary.netPnl - previousCumulative
+  const rawProgress = moneyNet - previousCumulative
   requirements.push({
     label: 'Ganancia del nivel',
-    value: `${money(levelProgressAmount(level, previousCumulative, summary.netPnl))} / ${money(level.goalAmount)}`,
+    value: `${money(levelProgressAmount(level, previousCumulative, moneyNet))} / ${money(level.goalAmount)}`,
     met: rawProgress >= level.goalAmount,
   })
 
@@ -211,20 +215,46 @@ export function computeLevelStatus(input: {
   initialBalance: number
   levels: LevelDef[]
   grantedLevelIds: string[]
+  /**
+   * Asignación manual del mentor (ronda 16 del smoke test): el estudiante
+   * ARRANCA en el nivel con esta `position` (default 1 = sin asignación).
+   * Los niveles anteriores quedan 'completado' por asignación — no consumen
+   * dinero y su único requisito es 'Asignación del mentor'. La escalera de
+   * consumo secuencial se recalcula desde el nivel asignado.
+   */
+  startPosition?: number
+  /**
+   * netPnl del estudiante EN EL MOMENTO de la asignación (default 0). El
+   * dinero de la escalera es `netPnl - baselineNet`: el nivel asignado
+   * arranca desde cero aunque el estudiante ya tuviera ganancias — coherente
+   * con la regla de "al pasar de nivel el progreso regresa a 0". Los gates de
+   * PF/operaciones/drawdown siguen midiendo la cuenta completa.
+   */
+  baselineNet?: number
 }): LevelStatus {
   const { trades, initialBalance, levels, grantedLevelIds } = input
+  const startPosition = input.startPosition ?? 1
+  const baselineNet = input.baselineNet ?? 0
 
   const summary = computeSummary(trades, initialBalance)
   const balances = equityPoints(trades, initialBalance).map((p) => p.balance)
   const drawdown = maxDrawdownPct(balances)
+  const moneyNet = summary.netPnl - baselineNet
 
   const sorted = [...levels].sort((a, b) => a.position - b.position)
-  const cumulativeGoals = cumulativeGoalsById(sorted)
+  // La escalera de dinero solo incluye los niveles desde el asignado; los
+  // anteriores no aparecen en el mapa (completados por asignación, sin cubo).
+  const ladder = sorted.filter((level) => level.position >= startPosition)
+  const cumulativeGoals = cumulativeGoalsById(ladder)
 
   const completedById = new Map<string, boolean>()
   for (const level of sorted) {
+    if (level.position < startPosition) {
+      completedById.set(level.id, true)
+      continue
+    }
     const { cumulative } = cumulativeGoals.get(level.id)!
-    completedById.set(level.id, levelCompleted(level, cumulative, summary, drawdown, grantedLevelIds))
+    completedById.set(level.id, levelCompleted(level, cumulative, summary, drawdown, grantedLevelIds, moneyNet))
   }
 
   let current: LevelDef | null = null
@@ -240,11 +270,13 @@ export function computeLevelStatus(input: {
   let progressPct = 100
   if (next !== null) {
     const { previousCumulative } = cumulativeGoals.get(next.id)!
-    const rawProgress = summary.netPnl - previousCumulative
-    progressAmount = levelProgressAmount(next, previousCumulative, summary.netPnl)
+    const rawProgress = moneyNet - previousCumulative
+    progressAmount = levelProgressAmount(next, previousCumulative, moneyNet)
     missingAmount = Math.max(0, next.goalAmount - rawProgress)
     progressPct = next.goalAmount > 0 ? Math.min(100, (progressAmount / next.goalAmount) * 100) : 100
   }
+
+  const ASSIGNED_REQUIREMENT = [{ label: 'Asignación del mentor', value: 'Nivel inicial', met: true }]
 
   const perLevel = sorted.map((level) => {
     const completed = completedById.get(level.id) ?? false
@@ -253,8 +285,15 @@ export function computeLevelStatus(input: {
       : next !== null && level.id === next.id
         ? 'en_curso'
         : 'bloqueado'
+    if (level.position < startPosition) {
+      return { level, state, requirements: ASSIGNED_REQUIREMENT }
+    }
     const { previousCumulative } = cumulativeGoals.get(level.id)!
-    return { level, state, requirements: buildRequirements(level, previousCumulative, summary, drawdown, grantedLevelIds) }
+    return {
+      level,
+      state,
+      requirements: buildRequirements(level, previousCumulative, summary, drawdown, grantedLevelIds, moneyNet),
+    }
   })
 
   return { current, next, progressPct, progressAmount, missingAmount, perLevel }

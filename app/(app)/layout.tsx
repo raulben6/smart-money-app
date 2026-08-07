@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const db = getDb()
   const [unreadCount, { status }] = await Promise.all([
     unreadCountForUser(db, user.id),
-    getOwnLevelStatus(user.id, user.initialBalance),
+    getOwnLevelStatus(user.id, user.initialBalance, user.startLevelPosition, user.levelBaselineNet),
   ])
 
   return (

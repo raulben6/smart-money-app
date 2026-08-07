@@ -78,6 +78,40 @@ export async function insertNotification(
   return row.id
 }
 
+/**
+ * Notificación de sistema "¡Superaste el nivel!" (ronda 16) — a diferencia de
+ * `insertNotification`, NO exige mentor: la genera el propio sistema al detectar
+ * el ascenso (lib/level-notify.ts, llamado desde las actions de trades y del
+ * grant manual tras verificar la identidad del dueño).
+ *
+ * Dedupe por POSICIÓN del nivel, no por nombre (fix del revisor, ronda 16): el
+ * título canónico lleva la `position` (los nombres son editables y no únicos —
+ * renombrar un nivel no debe permitir re-felicitar, ni dos niveles con el mismo
+ * nombre suprimirse entre sí). Y es ATÓMICO: el índice único parcial
+ * `notifications_levelup_unique` (ver schema) respalda el `onConflictDoNothing`
+ * — dos trades guardados en paralelo no pueden duplicar la felicitación.
+ * Devuelve `true` solo si insertó.
+ */
+export async function insertLevelUpNotification(
+  db: Db,
+  userId: string,
+  level: { position: number; name: string },
+): Promise<boolean> {
+  const inserted = await db
+    .insert(notifications)
+    .values({
+      userId,
+      kind: 'felicitacion',
+      title: `¡Felicidades! Superaste el nivel ${level.position}`,
+      body: `Completaste todos los requisitos de ${level.name}. Tu progreso hacia el siguiente nivel arranca desde cero — ¡sigue así!`,
+      tradeId: null,
+    })
+    .onConflictDoNothing()
+    .returning({ id: notifications.id })
+
+  return inserted.length > 0
+}
+
 /** Notificación con el `tradeDate`/`asset` (nullable) del trade referenciado, si lo hay. */
 export type NotificationWithTrade = DbNotification & { tradeDate: string | null; asset: string | null }
 

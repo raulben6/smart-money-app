@@ -13,16 +13,18 @@ import { computeLevelStatus, type LevelStatus } from '@/lib/metrics/levels'
  * que `lib/mentor-stats.ts` (que resuelve lo equivalente para OTROS alumnos —
  * este helper es solo para el usuario de la sesión).
  */
-export const getOwnLevelStatus = cache(async (userId: string, initialBalance: number) => {
-  const db = getDb()
-  const [trades, levels, grantedLevelIds] = await Promise.all([
-    listTrades(db, userId),
-    listLevels(db),
-    listGrantIdsForUser(db, userId),
-  ])
-  const status = computeLevelStatus({ trades, initialBalance, levels, grantedLevelIds })
-  return { trades, status }
-})
+export const getOwnLevelStatus = cache(
+  async (userId: string, initialBalance: number, startPosition: number, baselineNet: number) => {
+    const db = getDb()
+    const [trades, levels, grantedLevelIds] = await Promise.all([
+      listTrades(db, userId),
+      listLevels(db),
+      listGrantIdsForUser(db, userId),
+    ])
+    const status = computeLevelStatus({ trades, initialBalance, levels, grantedLevelIds, startPosition, baselineNet })
+    return { trades, status }
+  },
+)
 
 /**
  * Nombre del nivel EN CURSO para mostrar — misma regla de unificación que

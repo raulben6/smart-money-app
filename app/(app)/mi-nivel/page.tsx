@@ -13,7 +13,12 @@ import { LevelCarousel } from '@/components/levels/LevelCarousel'
  */
 export default async function MiNivelPage() {
   const user = await requireUser()
-  const { status } = await getOwnLevelStatus(user.id, user.initialBalance ?? 0)
+  const { status } = await getOwnLevelStatus(
+    user.id,
+    user.initialBalance ?? 0,
+    user.startLevelPosition,
+    user.levelBaselineNet,
+  )
 
   return (
     <>

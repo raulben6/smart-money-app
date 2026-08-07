@@ -5,6 +5,7 @@ import { listStudents } from '@/lib/db/queries/mentor'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { StudentPicker } from '@/components/shell/StudentPicker'
 import { LevelEditor } from '@/components/mentor/LevelEditor'
+import { LevelAssign } from '@/components/mentor/LevelAssign'
 
 /**
  * Administración de niveles del mentor (Task 15): editor de los 5 niveles del programa
@@ -39,6 +40,15 @@ export default async function NivelesPage({ searchParams }: { searchParams: Prom
       </PageHeader>
 
       <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+        {hasStudents && studentId ? (
+          <LevelAssign
+            key={studentId}
+            studentId={studentId}
+            studentName={students.find((s) => s.id === studentId)?.name ?? ''}
+            levels={levels.map((l) => ({ id: l.id, position: l.position, name: l.name }))}
+            currentPosition={students.find((s) => s.id === studentId)?.startLevelPosition ?? 1}
+          />
+        ) : null}
         <LevelEditor levels={levels} studentId={studentId} grantedLevelIds={grantedLevelIds} hasStudents={hasStudents} />
       </div>
     </>

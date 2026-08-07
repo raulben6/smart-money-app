@@ -3,11 +3,19 @@ import { eq } from 'drizzle-orm'
 import { createTestDb, type TestDb } from '../../__tests__/helpers'
 import { users, levels, goals, notifications, tradeCaptures, trades, type DbUser } from '../../schema'
 import { insertTradeWithJournal } from '../trades'
-import { listStudents, listTradesForStudent, getTradeDetailForStudent, getCaptureForStudent, getStudentById } from '../mentor'
+import {
+  listStudents,
+  listTradesForStudent,
+  getTradeDetailForStudent,
+  getCaptureForStudent,
+  getStudentById,
+  setStudentStartLevel,
+} from '../mentor'
 import { listGoalsForUser, listGoalsForStudent, insertGoal, updateGoalById, deleteGoalById } from '../goals'
 import { listLevels, updateLevelById, grantLevel, revokeGrant, listGrantIdsForUser } from '../levels'
 import {
   insertNotification,
+  insertLevelUpNotification,
   listNotificationsForUser,
   markAllReadForUser,
   unreadCountForUser,
@@ -571,6 +579,45 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
 
       const { items } = await listNotificationsForUser(db, studentA.id, { desde: '2026-08-01', hasta: '2026-08-31' })
       expect(items.map((n) => n.title)).toEqual(['Dentro'])
+    })
+
+    it('setStudentStartLevel (ronda 16): el mentor asigna nivel+baseline a UN estudiante; un estudiante como caller es rechazado y un mentor como destino no se toca', async () => {
+      // Mentor asigna al estudiante A — solo A cambia.
+      expect(await setStudentStartLevel(db, mentor.id, studentA.id, 3, 600)).toBe(true)
+      const [rowA] = await db.select().from(users).where(eq(users.id, studentA.id))
+      const [rowB] = await db.select().from(users).where(eq(users.id, studentB.id))
+      expect(rowA.startLevelPosition).toBe(3)
+      expect(rowA.levelBaselineNet).toBe(600)
+      expect(rowB.startLevelPosition).toBe(1)
+
+      // Estudiante como caller: rechazado sin tocar nada.
+      expect(await setStudentStartLevel(db, studentB.id, studentB.id, 5, 0)).toBe(false)
+      const [rowB2] = await db.select().from(users).where(eq(users.id, studentB.id))
+      expect(rowB2.startLevelPosition).toBe(1)
+
+      // El destino debe ser estudiante: la fila del mentor es intocable.
+      expect(await setStudentStartLevel(db, mentor.id, mentor.id, 4, 0)).toBe(false)
+      const [rowM] = await db.select().from(users).where(eq(users.id, mentor.id))
+      expect(rowM.startLevelPosition).toBe(1)
+    })
+
+    it('insertLevelUpNotification (ronda 16): felicita una sola vez por POSICIÓN de nivel — renombrar el nivel no re-felicita, y el dedupe es atómico (índice único parcial)', async () => {
+      expect(await insertLevelUpNotification(db, studentA.id, { position: 1, name: 'Nivel 1' })).toBe(true)
+      expect(await insertLevelUpNotification(db, studentA.id, { position: 1, name: 'Nivel 1' })).toBe(false)
+      // Renombrado por el mentor DESPUÉS de la felicitación: misma posición → no re-felicita.
+      expect(await insertLevelUpNotification(db, studentA.id, { position: 1, name: 'Aprendiz renombrado' })).toBe(false)
+      // Posición distinta sí inserta; y la misma posición para OTRO estudiante también.
+      expect(await insertLevelUpNotification(db, studentA.id, { position: 2, name: 'Nivel 2' })).toBe(true)
+      expect(await insertLevelUpNotification(db, studentB.id, { position: 1, name: 'Nivel 1' })).toBe(true)
+
+      const { items } = await listNotificationsForUser(db, studentA.id)
+      const felicitaciones = items.filter((n) => n.kind === 'felicitacion')
+      expect(felicitaciones).toHaveLength(2)
+      // El título canónico ancla la posición; el body conserva el nombre del momento.
+      expect(felicitaciones.map((n) => n.title).sort()).toEqual([
+        '¡Felicidades! Superaste el nivel 1',
+        '¡Felicidades! Superaste el nivel 2',
+      ])
     })
 
     it('desde/hasta anclan el día a la zona del programa (UTC-6), no a la del servidor: un mensaje de las 8pm hora local (02:00Z del día siguiente) pertenece al día local', async () => {

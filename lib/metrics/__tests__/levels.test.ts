@@ -262,3 +262,100 @@ describe('computeLevelStatus — consumo secuencial (cada nivel reinicia su meta
     expect(status.perLevel[0].state).toBe('completado')
   })
 })
+
+describe('computeLevelStatus — asignación manual de nivel (startPosition + baselineNet, ronda 16)', () => {
+  it('(k) estudiante nuevo asignado al nivel 3: 1-2 completados por asignación (con su requisito propio), en curso el 3 DESDE CERO', () => {
+    const status = computeLevelStatus({
+      trades: [],
+      initialBalance: 10000,
+      levels: MONEY_ONLY_LEVELS,
+      grantedLevelIds: [],
+      startPosition: 3,
+      baselineNet: 0,
+    })
+    expect(status.current?.id).toBe('m2')
+    expect(status.next?.id).toBe('m3')
+    expect(status.progressAmount).toBe(0)
+    expect(status.missingAmount).toBe(2000)
+    expect(status.perLevel.map((p) => p.state)).toEqual(['completado', 'completado', 'en_curso'])
+    expect(status.perLevel[0].requirements).toEqual([{ label: 'Asignación del mentor', value: 'Nivel inicial', met: true }])
+    expect(status.perLevel[1].requirements).toEqual([{ label: 'Asignación del mentor', value: 'Nivel inicial', met: true }])
+  })
+
+  it('(l) baselineNet descuenta lo ganado ANTES de la asignación: el nivel asignado arranca en 0 y solo las ganancias nuevas avanzan', () => {
+    const previas: TradePoint[] = [{ tradeDate: '2026-01-01', pnlUsd: 600 }]
+    const base = { initialBalance: 1000, levels: MONEY_ONLY_LEVELS, grantedLevelIds: [], startPosition: 3, baselineNet: 600 }
+
+    const alAsignar = computeLevelStatus({ trades: previas, ...base })
+    expect(alAsignar.next?.id).toBe('m3')
+    expect(alAsignar.progressAmount).toBe(0)
+    expect(alAsignar.missingAmount).toBe(2000)
+
+    const conAvance = computeLevelStatus({ trades: [...previas, { tradeDate: '2026-01-02', pnlUsd: 250 }], ...base })
+    expect(conAvance.progressAmount).toBe(250)
+    expect(conAvance.missingAmount).toBe(1750)
+  })
+
+  it('(m) la cascada de consumo continúa desde el nivel asignado: asignado al 2 con $2,600 nuevos completa M2 ($1,000) y lleva $1,600 en M3', () => {
+    const trades: TradePoint[] = [{ tradeDate: '2026-01-01', pnlUsd: 2600 }]
+    const status = computeLevelStatus({
+      trades,
+      initialBalance: 0,
+      levels: MONEY_ONLY_LEVELS,
+      grantedLevelIds: [],
+      startPosition: 2,
+    })
+    expect(status.current?.id).toBe('m2')
+    expect(status.next?.id).toBe('m3')
+    expect(status.progressAmount).toBe(1600)
+    expect(status.perLevel.map((p) => p.state)).toEqual(['completado', 'completado', 'en_curso'])
+  })
+
+  it('(n) los gates no monetarios siguen reteniendo al nivel asignado: dinero cubierto pero PF bajo → el nivel queda en curso', () => {
+    // net 2000 (= goalAmount de l3 con la escalera arrancando en 3), PF 6000/4000 = 1.5 < 1.8
+    const trades: TradePoint[] = [
+      { tradeDate: '2026-01-01', pnlUsd: 6000 },
+      { tradeDate: '2026-01-02', pnlUsd: -4000 },
+    ]
+    const status = computeLevelStatus({
+      trades,
+      initialBalance: 10000,
+      levels: LEVELS,
+      grantedLevelIds: [],
+      startPosition: 3,
+    })
+    expect(status.current?.id).toBe('l2')
+    expect(status.next?.id).toBe('l3')
+    const pf = status.perLevel.find((p) => p.level.id === 'l3')?.requirements.find((r) => r.label === 'Profit Factor mínimo')
+    expect(pf?.met).toBe(false)
+    const dinero = status.perLevel.find((p) => p.level.id === 'l3')?.requirements.find((r) => r.label === 'Ganancia del nivel')
+    expect(dinero?.met).toBe(true)
+  })
+
+  it('(o) retrocompatibilidad: startPosition 1 / baselineNet 0 explícitos == omitirlos', () => {
+    const implicito = computeLevelStatus({ trades: MOCKUP_TRADES, initialBalance: 25000, levels: LEVELS, grantedLevelIds: [] })
+    const explicito = computeLevelStatus({
+      trades: MOCKUP_TRADES,
+      initialBalance: 25000,
+      levels: LEVELS,
+      grantedLevelIds: [],
+      startPosition: 1,
+      baselineNet: 0,
+    })
+    expect(explicito).toEqual(implicito)
+  })
+
+  it('(p) asignado por encima del último nivel definido: todos completados, next null, pct 100', () => {
+    const status = computeLevelStatus({
+      trades: [],
+      initialBalance: 0,
+      levels: MONEY_ONLY_LEVELS,
+      grantedLevelIds: [],
+      startPosition: 4,
+    })
+    expect(status.current?.id).toBe('m3')
+    expect(status.next).toBeNull()
+    expect(status.progressPct).toBe(100)
+    expect(status.perLevel.map((p) => p.state)).toEqual(['completado', 'completado', 'completado'])
+  })
+})

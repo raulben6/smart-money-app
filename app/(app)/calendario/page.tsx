@@ -29,7 +29,12 @@ export default async function CalendarioPage({
   const resolvedSearchParams = await searchParams
   const { y, m, trade, nuevo, fecha, dia } = resolvedSearchParams
 
-  const { trades, status } = await getOwnLevelStatus(user.id, user.initialBalance ?? 0)
+  const { trades, status } = await getOwnLevelStatus(
+    user.id,
+    user.initialBalance ?? 0,
+    user.startLevelPosition,
+    user.levelBaselineNet,
+  )
 
   return (
     <>

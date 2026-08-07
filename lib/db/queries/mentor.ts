@@ -133,3 +133,30 @@ export async function getCaptureForStudent(db: Db, mentorId: string, captureId: 
 
   return row?.capture ?? null
 }
+
+/**
+ * Asignación manual de nivel (ronda 16): fija el nivel inicial del estudiante
+ * (`startLevelPosition`) y el baseline de dinero (`levelBaselineNet` = su netPnl
+ * al momento de asignar — el nivel asignado arranca desde cero, ver
+ * computeLevelStatus). `false` si `mentorId` no es mentor o si el destinatario
+ * no es un estudiante (el `eq(users.role, 'student')` del WHERE hace imposible
+ * tocar la fila de un mentor aunque el chequeo previo se saltara — defensa en
+ * profundidad, misma doble capa que el resto del módulo).
+ */
+export async function setStudentStartLevel(
+  db: Db,
+  mentorId: string,
+  studentId: string,
+  startLevelPosition: number,
+  levelBaselineNet: number,
+): Promise<boolean> {
+  if (!(await isMentor(db, mentorId))) return false
+
+  const updated = await db
+    .update(users)
+    .set({ startLevelPosition, levelBaselineNet })
+    .where(and(eq(users.id, studentId), eq(users.role, 'student')))
+    .returning({ id: users.id })
+
+  return updated.length > 0
+}

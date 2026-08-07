@@ -48,6 +48,8 @@ function fakeStats(overrides: {
     name: overrides.name,
     initialBalance: null,
     createdAt: new Date(),
+    startLevelPosition: 1,
+    levelBaselineNet: 0,
   }
   return {
     student,
