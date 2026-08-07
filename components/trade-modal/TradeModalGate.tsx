@@ -3,7 +3,7 @@ import { requireUser, requireMentor } from '@/lib/auth'
 import { getTradeDetail } from '@/lib/db/queries/trades'
 import { getTradeDetailForStudent } from '@/lib/db/queries/mentor'
 import { isValidUuid } from '@/lib/validation/uuid'
-import { todayLocalISO } from '@/lib/format'
+import { todayAppISO } from '@/lib/app-time'
 import { TradeModal, type EditableTrade } from './TradeModal'
 import { EMPTY_JOURNAL, type CapturePhase, type ExistingCapture, type JournalFormState } from './JournalSection'
 
@@ -129,7 +129,7 @@ export async function TradeModalGate({
   // branch solo se alcanza con `viewer.mode === 'owner'`, así que `readOnly` siempre es `false`
   // aquí — pero `TradeModal` lo exige explícito (prop obligatoria), no opcional.
   if (viewer.mode === 'owner' && searchParams.nuevo) {
-    const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayLocalISO()
+    const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayAppISO()
     return <TradeModal key="create" mode="create" defaultDate={fecha} readOnly={false} />
   }
 

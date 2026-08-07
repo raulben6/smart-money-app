@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gte, isNull, lte, type SQL } from 'drizzle-orm'
+import { APP_UTC_OFFSET } from '@/lib/app-time'
 import { notifications, trades, users, type DbNotification } from '@/lib/db/schema'
 import type { Db } from '@/lib/db/queries/trades'
 import { isMentor, isStudent } from '@/lib/db/queries/mentor'
@@ -25,20 +26,16 @@ function normalizeLimit(limit: number | undefined): number {
  * capa no revalida el formato). `desde`/`hasta` faltantes no agregan condición (rango
  * abierto de ese lado).
  *
- * APROXIMACIÓN DE ZONA HORARIA (deliberada, documentada a pedido del smoke-test): `desde`/
- * `hasta` son fechas de calendario SIN hora ni offset; `new Date('YYYY-MM-DDT00:00:00')` /
- * `new Date('YYYY-MM-DDT23:59:59.999')` los interpreta en la hora LOCAL DEL SERVIDOR (donde
- * corre este proceso Node), mientras que `notifications.createdAt` se guarda en UTC. Para
- * un usuario en una zona horaria distinta a la del servidor, el límite de "todo el día X"
- * puede desplazarse algunas horas (p. ej. un mensaje de las 23:30 hora del usuario podría
- * caer del lado del día siguiente si el servidor corre varias horas adelantado). Aceptable
- * para un filtro de rango aproximado en un centro de notificaciones — NO para un reporte
- * contable que necesite el corte exacto del día calendario del usuario.
+ * Los límites del día se anclan a la zona del programa (`APP_UTC_OFFSET`, ver
+ * lib/app-time.ts) con un offset explícito en el string — NUNCA a la hora local del
+ * proceso Node: la versión anterior parseaba 'T00:00:00' sin offset y en producción
+ * (servidor en UTC) desplazaba el rango 6 horas, excluyendo los mensajes enviados por la
+ * tarde/noche del día `hasta` (bug cazado por el usuario, ronda 13 del smoke-test).
  */
 function dateRangeConditions(desde: string | undefined, hasta: string | undefined): SQL[] {
   const conditions: SQL[] = []
-  if (desde) conditions.push(gte(notifications.createdAt, new Date(`${desde}T00:00:00`)))
-  if (hasta) conditions.push(lte(notifications.createdAt, new Date(`${hasta}T23:59:59.999`)))
+  if (desde) conditions.push(gte(notifications.createdAt, new Date(`${desde}T00:00:00${APP_UTC_OFFSET}`)))
+  if (hasta) conditions.push(lte(notifications.createdAt, new Date(`${hasta}T23:59:59.999${APP_UTC_OFFSET}`)))
   return conditions
 }
 

@@ -573,6 +573,24 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       expect(items.map((n) => n.title)).toEqual(['Dentro'])
     })
 
+    it('desde/hasta anclan el día a la zona del programa (UTC-6), no a la del servidor: un mensaje de las 8pm hora local (02:00Z del día siguiente) pertenece al día local', async () => {
+      // Escenario real del bug (ronda 13): el mentor comenta el 6 de agosto a las
+      // 8pm hora del programa -> createdAt = 2026-08-07T02:00:00Z. El filtro
+      // hasta=2026-08-06 DEBE incluirlo y desde=2026-08-07 DEBE excluirlo. La
+      // implementación vieja (límites en hora local del proceso) devuelve lo
+      // contrario cuando el servidor corre en UTC.
+      const nochedel6 = new Date('2026-08-07T02:00:00Z')
+      await db
+        .insert(notifications)
+        .values({ userId: studentA.id, kind: 'observacion', title: 'Noche del 6', body: '...', createdAt: nochedel6 })
+
+      const { items: hastaEl6 } = await listNotificationsForUser(db, studentA.id, { hasta: '2026-08-06' })
+      expect(hastaEl6.map((n) => n.title)).toEqual(['Noche del 6'])
+
+      const { items: desdeEl7 } = await listNotificationsForUser(db, studentA.id, { desde: '2026-08-07' })
+      expect(desdeEl7).toEqual([])
+    })
+
     it('listSentNotifications(desde/hasta) filtra por rango; (studentId) filtra por destinatario; ambos combinados', async () => {
       const dentro = new Date('2026-08-15T10:00:00Z')
       const fuera = new Date('2026-01-01T10:00:00Z')

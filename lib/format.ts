@@ -33,6 +33,12 @@ export const MONTH_NAMES_ES_SHORT = [
 ]
 
 /** 'YYYY-MM-DD' de hoy en hora local (nunca toISOString, que puede desplazar el día en zonas negativas). */
+/**
+ * SOLO para componentes CLIENTE (usa la hora del navegador del usuario). En
+ * código de servidor usar `todayAppISO()` de lib/app-time — en producción el
+ * proceso corre en UTC y esta función devolvería "mañana" desde las 6 pm hora
+ * del programa (bug de la ronda 13 del smoke-test).
+ */
 export function todayLocalISO(): string {
   const d = new Date()
   const y = d.getFullYear()

@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db'
 import { listTrades } from '@/lib/db/queries/trades'
 import { listGoalsForUser } from '@/lib/db/queries/goals'
 import { computeGoalProgress } from '@/lib/metrics/goals'
-import { todayLocalISO } from '@/lib/format'
+import { todayAppISO } from '@/lib/app-time'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { GoalCard, formatGoalProgress } from '@/components/goals/GoalCard'
 
@@ -19,7 +19,7 @@ export default async function ObjetivosPage() {
 
   const [goals, trades] = await Promise.all([listGoalsForUser(db, user.id), listTrades(db, user.id)])
 
-  const today = todayLocalISO()
+  const today = todayAppISO()
 
   return (
     <>

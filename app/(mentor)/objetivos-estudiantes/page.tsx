@@ -4,7 +4,7 @@ import { getDb } from '@/lib/db'
 import { listStudents, listTradesForStudent } from '@/lib/db/queries/mentor'
 import { listGoalsForStudent } from '@/lib/db/queries/goals'
 import { computeGoalProgress } from '@/lib/metrics/goals'
-import { todayLocalISO } from '@/lib/format'
+import { todayAppISO } from '@/lib/app-time'
 import { isValidUuid } from '@/lib/validation/uuid'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { StudentPicker } from '@/components/shell/StudentPicker'
@@ -60,7 +60,7 @@ export default async function ObjetivosEstudiantesPage({
     listTradesForStudent(db, mentor.id, studentId),
   ])
 
-  const today = todayLocalISO()
+  const today = todayAppISO()
 
   // Solo se abre el form de edición si `editar` resuelve a un objetivo REAL del alumno
   // seleccionado (nunca el de otro alumno, ni un id inexistente) — mismo patrón

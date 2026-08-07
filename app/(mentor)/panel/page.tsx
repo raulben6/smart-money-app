@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { requireMentor } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import { loadStudentStats, computePanelSummary } from '@/lib/mentor-stats'
-import { pct, todayLocalISO } from '@/lib/format'
+import { pct } from '@/lib/format'
+import { todayAppISO } from '@/lib/app-time'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { RankingTable } from '@/components/mentor/RankingTable'
 
@@ -37,7 +38,7 @@ export default async function PanelPage() {
     )
   }
 
-  const summary = computePanelSummary(stats, todayLocalISO())
+  const summary = computePanelSummary(stats, todayAppISO())
 
   const cards: { label: string; value: string; sub: string; colorClassName?: string }[] = [
     {
