@@ -680,6 +680,7 @@ export function TradeModal(props: TradeModalProps) {
           position: fixed; inset: 0; z-index: 60;
           display: flex; align-items: flex-start; justify-content: center;
           padding: 44px 20px; overflow: auto;
+          overscroll-behavior: contain;
           background: color-mix(in oklab, var(--scrim-base) 72%, transparent);
           backdrop-filter: blur(3px);
         }
@@ -690,10 +691,14 @@ export function TradeModal(props: TradeModalProps) {
           display: flex; flex-direction: column; overflow: hidden;
           animation: smRise .22s ease both;
         }
-        .trademodal-content { overflow-y: auto; }
+        .trademodal-content { overflow-y: auto; overscroll-behavior: contain; }
         @media (max-width: 639px) {
-          .trademodal-backdrop { padding: 0; align-items: stretch; }
-          .trademodal-dialog { width: 100%; height: 100%; max-height: 100%; border-radius: 0; border: 0; }
+          /* Hoja a pantalla completa con UN solo contenedor de scroll (el
+             contenido): el backdrop deja de scrollear para que el teclado en
+             pantalla no desplace el dialogo entero, y 100dvh lo ancla al
+             viewport dinamico (la barra del navegador ya no lo redimensiona). */
+          .trademodal-backdrop { padding: 0; align-items: stretch; overflow: hidden; }
+          .trademodal-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
         }
       `}</style>
 

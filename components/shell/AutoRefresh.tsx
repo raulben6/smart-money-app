@@ -24,6 +24,11 @@ export function AutoRefresh({ intervalMs = 30_000 }: { intervalMs?: number }) {
     function refresh() {
       if (document.visibilityState !== 'visible') return
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+      // Con un modal abierto (registro de trade, objetivos...) no se refresca:
+      // un re-render a mitad de escritura puede producir tirones, sobre todo
+      // en móvil con el teclado desplegado. Al cerrar, el siguiente tick trae
+      // los datos frescos.
+      if (document.querySelector('[role="dialog"]')) return
       const now = Date.now()
       if (now - lastRefresh.current < MIN_GAP_MS) return
       lastRefresh.current = now

@@ -280,6 +280,12 @@ figcaption {
   background: var(--color-surface);
   border: 1px solid var(--color-divider); border-radius: var(--radius-md);
 }
+/* En pantallas táctiles pequeñas los campos suben a 16px: por debajo de eso,
+   iOS Safari hace zoom automático al enfocar y el formulario "salta" entre
+   campo y campo (reporte del usuario, ronda 14 del smoke-test). */
+@media (max-width: 639px) {
+  .input { font-size: 16px; }
+}
 .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
 textarea.input { min-height: 90px; resize: vertical; }
