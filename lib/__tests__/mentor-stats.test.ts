@@ -46,6 +46,8 @@ function fakeStats(overrides: {
     clerkId: `clerk_${id}`,
     role: 'student',
     name: overrides.name,
+    email: null,
+    archivedAt: null,
     initialBalance: null,
     createdAt: new Date(),
     startLevelPosition: 1,

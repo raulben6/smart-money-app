@@ -15,6 +15,14 @@ export const users = pgTable('users', {
   clerkId: text('clerk_id').notNull().unique(),
   role: roleEnum('role').notNull().default('student'),
   name: text('name').notNull().default(''),
+  // Correo primario VERIFICADO de Clerk, en minúsculas (ronda 17): permite
+  // reconectar el historial cuando un correo re-invitado vuelve a entrar con
+  // un clerkId nuevo. null hasta el primer login posterior a esta migración
+  // (se rellena en requireUser) o si el correo aún no está verificado.
+  email: text('email'),
+  // Baja del programa (ronda 17): timestamp = archivado (fuera del panel,
+  // métricas y escrituras del mentor; datos preservados). null = activo.
+  archivedAt: timestamp('archived_at'),
   initialBalance: money('initial_balance'), // null hasta completar onboarding
   createdAt: timestamp('created_at').notNull().defaultNow(),
   // Asignación manual de nivel (ronda 16): el estudiante arranca en este

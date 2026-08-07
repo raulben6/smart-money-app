@@ -10,7 +10,10 @@ import {
   getCaptureForStudent,
   getStudentById,
   setStudentStartLevel,
+  archiveStudentById,
+  isStudent,
 } from '../mentor'
+import { findRelinkCandidateByEmail, relinkUserById, releaseEmailClaims } from '../users'
 import { listGoalsForUser, listGoalsForStudent, insertGoal, updateGoalById, deleteGoalById } from '../goals'
 import { listLevels, updateLevelById, grantLevel, revokeGrant, listGrantIdsForUser } from '../levels'
 import {
@@ -579,6 +582,75 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
 
       const { items } = await listNotificationsForUser(db, studentA.id, { desde: '2026-08-01', hasta: '2026-08-31' })
       expect(items.map((n) => n.title)).toEqual(['Dentro'])
+    })
+
+    it('archiveStudentById (ronda 17): el mentor archiva a UN estudiante activo — sale de listStudents y deja de ser destino (isStudent); estudiante como caller y mentor como destino rechazados; re-archivar es no-op', async () => {
+      // Estudiante como caller: rechazado.
+      expect(await archiveStudentById(db, studentA.id, studentB.id)).toBeNull()
+      // Mentor como destino: intocable.
+      expect(await archiveStudentById(db, mentor.id, mentor.id)).toBeNull()
+
+      // Mentor archiva a B: solo B desaparece de la lista y de los gates.
+      const archived = await archiveStudentById(db, mentor.id, studentB.id)
+      expect(archived?.archivedAt).not.toBeNull()
+      expect((await listStudents(db, mentor.id)).map((s) => s.id)).toEqual([studentA.id])
+      expect(await isStudent(db, studentB.id)).toBe(false)
+      expect(await isStudent(db, studentA.id)).toBe(true)
+      // Un archivado ya no recibe escrituras del mentor (gate compartido).
+      expect(await insertNotification(db, mentor.id, { userId: studentB.id, ...minimalFeedback })).toBeNull()
+
+      // Re-archivar: no-op (ya no es estudiante activo).
+      expect(await archiveStudentById(db, mentor.id, studentB.id)).toBeNull()
+    })
+
+    it('reconexión (ronda 17): candidato por correo case-insensitive + relink recupera el historial; una fila de MENTOR jamás es candidata ni transferible', async () => {
+      // Se archiva a B y se le fija un correo (como haría requireUser en su época activa).
+      await db.update(users).set({ email: 'viejo@ejemplo.com' }).where(eq(users.id, studentB.id))
+      await archiveStudentById(db, mentor.id, studentB.id)
+
+      // Un trade suyo de la época anterior — el historial que debe sobrevivir.
+      const tradeId = await insertTradeWithJournal(db, studentB.id, minimalTrade)
+
+      const candidate = await findRelinkCandidateByEmail(db, 'VIEJO@Ejemplo.com')
+      expect(candidate?.id).toBe(studentB.id)
+
+      const relinked = await relinkUserById(db, studentB.id, 'clerk_nuevo_123', 'Nombre Actualizado')
+      expect(relinked?.clerkId).toBe('clerk_nuevo_123')
+      expect(relinked?.archivedAt).toBeNull()
+      expect(relinked?.name).toBe('Nombre Actualizado')
+
+      // Reaparece como estudiante activo con su historial.
+      expect(await isStudent(db, studentB.id)).toBe(true)
+      const trades = await listTradesForStudent(db, mentor.id, studentB.id)
+      expect(trades.map((t) => t.id)).toContain(tradeId)
+
+      // Correo desconocido: sin candidato (el caller crea fila nueva).
+      expect(await findRelinkCandidateByEmail(db, 'nadie@ejemplo.com')).toBeNull()
+
+      // HALLAZGO HIGH del revisor: una fila de MENTOR con correo obsoleto no es
+      // candidata (filtro role='student') ni transferible (candado en el UPDATE).
+      await db.update(users).set({ email: 'mentorviejo@ejemplo.com' }).where(eq(users.id, mentor.id))
+      expect(await findRelinkCandidateByEmail(db, 'mentorviejo@ejemplo.com')).toBeNull()
+      expect(await relinkUserById(db, mentor.id, 'clerk_atacante', 'X')).toBeNull()
+    })
+
+    it('releaseEmailClaims (ronda 17): anula el correo en TODAS las demás filas que lo reclamen, respetando keepUserId', async () => {
+      // HALLAZGO MEDIUM del revisor: dos filas con el mismo correo (reclamación
+      // obsoleta) harían que un relink futuro entregara el historial equivocado.
+      await db.update(users).set({ email: 'compartido@ejemplo.com' }).where(eq(users.id, studentA.id))
+      await db.update(users).set({ email: 'compartido@ejemplo.com' }).where(eq(users.id, studentB.id))
+
+      await releaseEmailClaims(db, 'COMPARTIDO@ejemplo.com', studentA.id)
+
+      const [rowA] = await db.select().from(users).where(eq(users.id, studentA.id))
+      const [rowB] = await db.select().from(users).where(eq(users.id, studentB.id))
+      expect(rowA.email).toBe('compartido@ejemplo.com')
+      expect(rowB.email).toBeNull()
+
+      // keepUserId null: libera todas.
+      await releaseEmailClaims(db, 'compartido@ejemplo.com', null)
+      const [rowA2] = await db.select().from(users).where(eq(users.id, studentA.id))
+      expect(rowA2.email).toBeNull()
     })
 
     it('setStudentStartLevel (ronda 16): el mentor asigna nivel+baseline a UN estudiante; un estudiante como caller es rechazado y un mentor como destino no se toca', async () => {

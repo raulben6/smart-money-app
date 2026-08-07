@@ -6,6 +6,7 @@ import { listTradesForStudent, listStudents, getStudentById } from '@/lib/db/que
 import { DashboardView } from '@/components/dashboard/DashboardView'
 import { StudentPicker } from '@/components/shell/StudentPicker'
 import { StudentViewTabs } from '@/components/shell/StudentViewTabs'
+import { RemoveStudentButton } from '@/components/mentor/RemoveStudentButton'
 import { TradeModalGate } from '@/components/trade-modal/TradeModalGate'
 
 /**
@@ -55,6 +56,7 @@ export default async function StudentDashboardPage({
               currentId={id}
               subroute="dashboard"
             />
+            <RemoveStudentButton studentId={id} studentName={student.name} />
           </>
         }
       />

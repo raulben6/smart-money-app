@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 import {
   users,
   trades,
@@ -37,19 +37,26 @@ export async function isMentor(db: Db, userId: string): Promise<boolean> {
  * inexistente y colarse como si fuera un estudiante.
  */
 export async function isStudent(db: Db, userId: string): Promise<boolean> {
+  // Un estudiante ARCHIVADO (ronda 17) deja de ser destino válido: este único
+  // gate saca a los dados de baja de todas las escrituras y lecturas del
+  // mentor (feedback, goals, grants, asignación de nivel, vistas por alumno).
   const rows = await db
     .select({ id: users.id })
     .from(users)
-    .where(and(eq(users.id, userId), eq(users.role, 'student')))
+    .where(and(eq(users.id, userId), eq(users.role, 'student'), isNull(users.archivedAt)))
     .limit(1)
   return rows.length > 0
 }
 
-/** Lista todos los estudiantes (role='student'); `[]` si `mentorId` no es un mentor. */
+/** Lista los estudiantes ACTIVOS (role='student', sin archivar); `[]` si `mentorId` no es un mentor. */
 export async function listStudents(db: Db, mentorId: string): Promise<DbUser[]> {
   if (!(await isMentor(db, mentorId))) return []
 
-  return db.select().from(users).where(eq(users.role, 'student')).orderBy(users.createdAt)
+  return db
+    .select()
+    .from(users)
+    .where(and(eq(users.role, 'student'), isNull(users.archivedAt)))
+    .orderBy(users.createdAt)
 }
 
 /**
@@ -65,7 +72,7 @@ export async function getStudentById(db: Db, mentorId: string, studentId: string
   const [row] = await db
     .select()
     .from(users)
-    .where(and(eq(users.id, studentId), eq(users.role, 'student')))
+    .where(and(eq(users.id, studentId), eq(users.role, 'student'), isNull(users.archivedAt)))
 
   return row ?? null
 }
@@ -143,6 +150,26 @@ export async function getCaptureForStudent(db: Db, mentorId: string, captureId: 
  * tocar la fila de un mentor aunque el chequeo previo se saltara — defensa en
  * profundidad, misma doble capa que el resto del módulo).
  */
+/**
+ * Baja del programa (ronda 17): archiva a un estudiante ACTIVO — fuera del
+ * panel, comparador, métricas y de todo gate `isStudent`; sus datos se
+ * preservan para el historial y para la reconexión si el correo regresa
+ * (`relinkUserByEmail`). `null` si `mentorId` no es mentor o si el destino no
+ * es un estudiante activo (doble gate en el WHERE, como todo el módulo). El
+ * caller (action) es responsable de revocar el acceso en Clerk ANTES.
+ */
+export async function archiveStudentById(db: Db, mentorId: string, studentId: string): Promise<DbUser | null> {
+  if (!(await isMentor(db, mentorId))) return null
+
+  const [row] = await db
+    .update(users)
+    .set({ archivedAt: new Date() })
+    .where(and(eq(users.id, studentId), eq(users.role, 'student'), isNull(users.archivedAt)))
+    .returning()
+
+  return row ?? null
+}
+
 export async function setStudentStartLevel(
   db: Db,
   mentorId: string,

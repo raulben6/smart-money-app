@@ -10,9 +10,16 @@ import { isValidUuid } from '@/lib/validation/uuid'
 import { goalSchema, levelSchema, feedbackSchema, inviteSchema } from '@/lib/validation/mentor'
 import { insertGoal, updateGoalById, deleteGoalById } from '@/lib/db/queries/goals'
 import { updateLevelById, grantLevel, revokeGrant, listLevels } from '@/lib/db/queries/levels'
-import { getTradeDetailForStudent, listTradesForStudent, setStudentStartLevel } from '@/lib/db/queries/mentor'
+import {
+  getTradeDetailForStudent,
+  listTradesForStudent,
+  setStudentStartLevel,
+  getStudentById,
+  archiveStudentById,
+} from '@/lib/db/queries/mentor'
 import { insertNotification } from '@/lib/db/queries/notifications'
 import { levelSnapshot, notifyNewLevelUps } from '@/lib/level-notify'
+import { isClerkNotFoundError } from '@/lib/clerk-errors'
 import type { ActionResult } from './types'
 
 const CAMPOS_INVALIDOS = 'Revisa los campos marcados'
@@ -158,6 +165,57 @@ export async function removeGoal(goalId: string): Promise<ActionResult<null>> {
 }
 
 /** Actualiza los parámetros de un nivel (meta, PF mínimo, trades mínimos, drawdown máximo). */
+/**
+ * Da de baja a un estudiante (ronda 17, decisión del usuario: ARCHIVAR, nunca
+ * borrar): revoca su acceso en Clerk y archiva su fila — desaparece del panel,
+ * comparador y métricas, pero sus datos quedan para el historial y para la
+ * reconexión automática si su correo es re-invitado (ver lib/db/queries/users).
+ *
+ * Orden deliberado: Clerk PRIMERO — jamás archivar dejando la cuenta viva (el
+ * alumno seguiría entrando mientras el mentor ya no lo ve). Si Clerk ya no
+ * tiene la cuenta (borrada a mano desde su dashboard), se continúa: el archivo
+ * en nuestra base es justo lo que faltaba. Fallo parcial (Clerk borrado pero
+ * el archivo falla): el alumno queda sin acceso y aún visible — REINTENTAR el
+ * botón sana (el 404 de Clerk se tolera y el archivo se vuelve a intentar).
+ */
+export async function removeStudent(studentId: string): Promise<ActionResult<null>> {
+  const mentor = await requireMentor()
+
+  if (!isValidUuid(studentId)) {
+    return { ok: false, error: SIN_PERMISO }
+  }
+
+  try {
+    const db = getDb()
+    const student = await getStudentById(db, mentor.id, studentId)
+    if (!student) {
+      return { ok: false, error: SIN_PERMISO }
+    }
+
+    try {
+      const client = await clerkClient()
+      await client.users.deleteUser(student.clerkId)
+    } catch (err) {
+      if (!isClerkNotFoundError(err)) throw err
+    }
+
+    const archived = await archiveStudentById(db, mentor.id, studentId)
+    if (!archived) {
+      return { ok: false, error: SIN_PERMISO }
+    }
+
+    revalidatePath('/panel')
+    revalidatePath('/comparador')
+    revalidatePath('/niveles')
+    revalidatePath('/objetivos-estudiantes')
+    revalidatePath('/mensajes')
+    return { ok: true, data: null }
+  } catch (err) {
+    console.error('[removeStudent]', err)
+    return { ok: false, error: ERROR_INESPERADO }
+  }
+}
+
 /**
  * LIMITACIÓN ACEPTADA (ronda 16, anotada por el revisor): si el mentor RELAJA
  * una definición (baja la meta o un gate) y eso completa niveles de algunos
