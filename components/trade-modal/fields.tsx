@@ -21,11 +21,13 @@ export interface FieldDef {
   required?: boolean
 }
 
-/** Errores de un campo (`--neg`, 11px) bajo el input, si los hay — ver mockup 532 (nota) y la resolución del step 5. */
-export function FieldErrors({ errors }: { errors?: string[] }) {
+/** Errores de un campo (`--neg`, 11px) bajo el input, si los hay — ver mockup 532 (nota) y la resolución del step 5.
+ * `id` liga este nodo al input vía `aria-describedby` (ver `FormField`) para que un lector de
+ * pantalla anuncie el mensaje al enfocar el campo, no solo al leer visualmente debajo. */
+export function FieldErrors({ errors, id }: { errors?: string[]; id?: string }) {
   if (!errors || errors.length === 0) return null
   return (
-    <div className="flex flex-col gap-[2px]">
+    <div id={id} className="flex flex-col gap-[2px]">
       {errors.map((msg) => (
         <span key={msg} className="text-neg" style={{ fontSize: '11px' }}>
           {msg}
@@ -48,6 +50,8 @@ export function FormField({
   errors?: string[]
 }) {
   const id = `trade-field-${field.name}`
+  const errorId = `${id}-error`
+  const hasError = Boolean(errors && errors.length > 0)
   const inputClassName = `input${field.kind === 'number' ? ' tabular-nums' : ''}${field.uppercase ? ' uppercase' : ''}`
 
   return (
@@ -57,7 +61,16 @@ export function FormField({
         {field.required ? ' *' : ''}
       </label>
       {field.kind === 'select' ? (
-        <select id={id} name={field.name} className="input" value={value} onChange={(e) => onChange(e.target.value)}>
+        <select
+          id={id}
+          name={field.name}
+          className="input"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={hasError ? true : undefined}
+          aria-describedby={hasError ? errorId : undefined}
+          aria-required={field.required ? true : undefined}
+        >
           {field.options?.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
@@ -73,9 +86,12 @@ export function FormField({
           className={inputClassName}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          aria-invalid={hasError ? true : undefined}
+          aria-describedby={hasError ? errorId : undefined}
+          aria-required={field.required ? true : undefined}
         />
       )}
-      <FieldErrors errors={errors} />
+      <FieldErrors errors={errors} id={errorId} />
     </div>
   )
 }
@@ -121,12 +137,17 @@ function ToggleButton({
   )
 }
 
-/** Segmentado Long/Short, verde/rojo (mockup 447-453, colores 896-897). */
+/** Segmentado Long/Short, verde/rojo (mockup 447-453, colores 896-897). Siempre tiene un valor
+ * (por defecto 'long', ver `EMPTY_FORM` en `TradeModal.tsx`) — el marcador `*` documenta que
+ * el campo es obligatorio en `tradeSchema`, no que pueda quedar vacío en la UI. Sin
+ * `aria-required` en el `role="group"`: esa propiedad no está soportada por ese rol
+ * (`jsx-a11y/role-supports-aria-props`) — el nombre accesible del grupo (`aria-label`) más el
+ * marcador visible ya comunican que es un campo obligatorio. */
 export function DirectionToggle({ value, onChange }: { value: string; onChange: (value: 'long' | 'short') => void }) {
   return (
     <div className="field">
       <span className="block text-[11px] text-neutral-400" style={{ marginBottom: '5px' }}>
-        Dirección
+        Dirección *
       </span>
       <div
         role="group"

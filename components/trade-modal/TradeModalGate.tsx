@@ -1,19 +1,21 @@
 import { getDb } from '@/lib/db'
+import { requireUser, requireMentor } from '@/lib/auth'
 import { getTradeDetail } from '@/lib/db/queries/trades'
+import { getTradeDetailForStudent } from '@/lib/db/queries/mentor'
 import { isValidUuid } from '@/lib/validation/uuid'
+import { todayAppISO } from '@/lib/app-time'
 import { TradeModal, type EditableTrade } from './TradeModal'
 import { EMPTY_JOURNAL, type CapturePhase, type ExistingCapture, type JournalFormState } from './JournalSection'
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
 
-/** 'YYYY-MM-DD' de hoy en hora local (nunca `toISOString`, que puede desplazar el día en zonas negativas). */
-function todayLocal(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+/**
+ * Quién mira el modal (Task 12): el propio dueño de los trades (`'owner'`), o un mentor
+ * viendo — solo lectura — los de un estudiante concreto (`'mentor'`). En modo mentor, `?nuevo`
+ * se IGNORA por completo (un mentor no crea operaciones a nombre de su alumno) y el detalle
+ * se resuelve con `getTradeDetailForStudent` en vez de `getTradeDetail`.
+ */
+export type TradeModalViewer = { mode: 'owner' } | { mode: 'mentor'; studentId: string }
 
 /**
  * Puerta de entrada del modal de operación: server component que decide, a partir de los
@@ -21,19 +23,26 @@ function todayLocal(): string {
  * cargando el detalle con su propia consulta a la base de datos), creación (`?nuevo=1`, con
  * `?fecha=` opcional — si falta o no tiene forma de fecha válida, hoy local) o nada.
  *
- * Se monta tanto en `/dashboard` como en `/calendario`; ambas páginas ya llaman a
- * `requireUser()` antes, así que `userId` siempre viene resuelto desde ahí.
+ * Se monta tanto en `/dashboard`/`/calendario` (alumno) como en sus equivalentes de mentor
+ * `/estudiantes/[id]/dashboard`/`/estudiantes/[id]/calendario` (Task 12). No recibe el
+ * usuario ya resuelto como prop: llama a `requireUser()`/`requireMentor()` por su cuenta —
+ * ambas están envueltas en `cache()` (`lib/auth.ts`), así que reinvocarlas aquí no repite
+ * trabajo, solo reusa lo que la página que lo monta ya resolvió en esta misma request.
  */
 export async function TradeModalGate({
   searchParams,
-  userId,
+  viewer,
 }: {
   searchParams: { trade?: string; nuevo?: string; fecha?: string }
-  userId: string
+  viewer: TradeModalViewer
 }) {
   if (searchParams.trade && isValidUuid(searchParams.trade)) {
     const db = getDb()
-    const detail = await getTradeDetail(db, userId, searchParams.trade)
+    const tradeId = searchParams.trade
+    const detail =
+      viewer.mode === 'owner'
+        ? await getTradeDetail(db, (await requireUser()).id, tradeId)
+        : await getTradeDetailForStudent(db, (await requireMentor()).id, viewer.studentId, tradeId)
     if (!detail) return null
 
     const t = detail.trade
@@ -63,6 +72,12 @@ export async function TradeModalGate({
     // `CapturePhase` de este módulo.
     const captures: ExistingCapture[] = detail.captures.map((c) => ({ id: c.id, phase: c.phase as CapturePhase }))
 
+    // Serializado a ISO string (no el `Date` de Drizzle) para mantener `EditableTrade`
+    // consistente con el resto de sus campos ("ya convertidas a un objeto plano y
+    // serializable", ver doc de la interfaz) — `JournalSection` lo compara contra un
+    // `savedAt` en milisegundos (`Date.now()`) al decidir si ofrecer restaurar un stash local.
+    const journalUpdatedAt = j ? j.updatedAt.toISOString() : null
+
     const plain: EditableTrade = {
       id: t.id,
       tradeDate: t.tradeDate,
@@ -87,19 +102,35 @@ export async function TradeModalGate({
       entryType: t.entryType,
       confirmations: t.confirmations,
       journal,
+      journalUpdatedAt,
       captures,
     }
 
     // `key` fuerza a React a desmontar/remontar el modal (y por tanto resetear todo su
     // estado interno — form, paso/pestaña activa, errores) en una transición
     // `?trade=A` -> `?trade=B` en el historial; sin esto, React reconciliaría el mismo
-    // `TradeModal` y dejaría el form de A pegado al abrir B.
-    return <TradeModal key={plain.id} mode="edit" detail={plain} />
+    // `TradeModal` y dejaría el form de A pegado al abrir B. `readOnly` solo en modo mentor.
+    // `studentId` (Task 16, `FeedbackSection`) solo se pasa en modo mentor — en modo owner
+    // queda `undefined`, ver doc de `TradeModalProps.studentId`.
+    return (
+      <TradeModal
+        key={plain.id}
+        mode="edit"
+        detail={plain}
+        readOnly={viewer.mode === 'mentor'}
+        studentId={viewer.mode === 'mentor' ? viewer.studentId : undefined}
+      />
+    )
   }
 
-  if (searchParams.nuevo) {
-    const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayLocal()
-    return <TradeModal key="create" mode="create" defaultDate={fecha} />
+  // Un mentor nunca crea operaciones a nombre de su alumno: `?nuevo` se ignora por completo
+  // en modo mentor, aunque llegue en la URL (defensa en profundidad, no solo ausencia de un
+  // botón en la UI — ver `DashboardView`/`CalendarView`, que ya no renderizan ese enlace). Este
+  // branch solo se alcanza con `viewer.mode === 'owner'`, así que `readOnly` siempre es `false`
+  // aquí — pero `TradeModal` lo exige explícito (prop obligatoria), no opcional.
+  if (viewer.mode === 'owner' && searchParams.nuevo) {
+    const fecha = searchParams.fecha && FECHA_RE.test(searchParams.fecha) ? searchParams.fecha : todayAppISO()
+    return <TradeModal key="create" mode="create" defaultDate={fecha} readOnly={false} />
   }
 
   return null

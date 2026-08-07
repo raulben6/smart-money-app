@@ -1,12 +1,8 @@
 import Link from 'next/link'
 import type { DbTrade } from '@/lib/db/schema'
-import { signedMoney } from '@/lib/format'
+import { signedMoney, MONTH_NAMES_ES } from '@/lib/format'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const MONTH_NAMES_LOWER = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-]
 
 type DayAggregate = { pnl: number; count: number }
 
@@ -41,10 +37,17 @@ function firstTradeIdByDay(trades: DbTrade[], year: number, month: number): Map<
 
 /**
  * Grid mensual: cabecera Lun-Dom + celdas de día en un único grid de 7
- * columnas (igual que el mockup, líneas 229-242). Cada celda con trades
- * enlaza a `?trade=<id>` (el más antiguo por `createdAt` ese día); sin
- * trades enlaza a `?nuevo=1&fecha=YYYY-MM-DD`. Lógica de tinte/borde por
- * signo replicada del mockup (líneas 668-688).
+ * columnas (igual que el mockup, líneas 229-242). Cada celda con un solo
+ * trade enlaza directo a `?trade=<id>`; con 2+ enlaza a `?dia=YYYY-MM-DD`
+ * (abre `DayTradesPanel`, que lista todas las operaciones de ese día — sin
+ * esto, un día con varios trades solo dejaba llegar al más antiguo por
+ * `createdAt`); sin trades enlaza a `?nuevo=1&fecha=YYYY-MM-DD` — salvo en
+ * modo `readOnly` (mentor, Task 12), donde una celda sin operaciones se
+ * renderiza como un `<div>` no interactivo en vez de un `<Link>` (un mentor
+ * no puede registrar operaciones a nombre de su alumno). `basePath` prefija
+ * todos los enlaces ('/calendario' para el alumno, '/estudiantes/[id]/calendario'
+ * para el mentor). Lógica de tinte/borde por signo replicada del mockup
+ * (líneas 668-688).
  *
  * El hover (borde acento + `translateY(-1px)`) y las variantes de
  * color/tinte se resuelven con clases (`.cal-day*`) en un `<style>` propio
@@ -59,16 +62,20 @@ export function MonthGrid({
   month,
   days,
   trades,
+  basePath,
+  readOnly,
 }: {
   year: number
   month: number
   days: Map<number, DayAggregate>
   trades: DbTrade[]
+  basePath: string
+  readOnly: boolean
 }) {
   const firstIds = firstTradeIdByDay(trades, year, month)
   const daysInMonth = new Date(year, month, 0).getDate()
   const offset = (new Date(year, month - 1, 1).getDay() + 6) % 7
-  const monthNameLower = MONTH_NAMES_LOWER[month - 1]
+  const monthNameLower = MONTH_NAMES_ES[month - 1].toLowerCase()
 
   return (
     <div>
@@ -88,6 +95,7 @@ export function MonthGrid({
           border-color: color-mix(in oklab, var(--neg) 40%, transparent);
           background: color-mix(in oklab, var(--neg) 12%, transparent);
         }
+        .cal-day-static:hover { border-color: var(--color-neutral-800); transform: none; }
       `}</style>
 
       <div className="grid grid-cols-7 gap-[7px]">
@@ -111,17 +119,9 @@ export function MonthGrid({
           const firstId = firstIds.get(day)
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
-          const href =
-            has && firstId
-              ? `/calendario?y=${year}&m=${month}&trade=${firstId}`
-              : `/calendario?y=${year}&m=${month}&nuevo=1&fecha=${dateStr}`
-
-          const ariaLabel = has
-            ? `${day} de ${monthNameLower}, ${signedMoney(pnl)}, ${count} ${tradeWord(count)}`
-            : `${day} de ${monthNameLower}, sin operaciones, registrar`
-
           const className = [
             'cal-day',
+            !has && readOnly ? 'cal-day-static' : '',
             'min-h-[52px]',
             'sm:min-h-[92px]',
             has ? (positive ? 'cal-day-pos' : 'cal-day-neg') : '',
@@ -129,9 +129,35 @@ export function MonthGrid({
             .filter(Boolean)
             .join(' ')
 
+          const daySpan = <span className="text-[11.5px] text-neutral-400 tabular-nums">{day}</span>
+
+          // Sin operaciones y modo mentor (readOnly): celda no interactiva, sin `?nuevo=` —
+          // un mentor no registra operaciones a nombre de su alumno.
+          if (!has && readOnly) {
+            return (
+              <div key={day} className={className} aria-label={`${day} de ${monthNameLower}, sin operaciones`}>
+                {daySpan}
+              </div>
+            )
+          }
+
+          const href =
+            count > 1
+              ? `${basePath}?y=${year}&m=${month}&dia=${dateStr}`
+              : has && firstId
+                ? `${basePath}?y=${year}&m=${month}&trade=${firstId}`
+                : `${basePath}?y=${year}&m=${month}&nuevo=1&fecha=${dateStr}`
+
+          const ariaLabel =
+            count > 1
+              ? `${day} de ${monthNameLower}, ${signedMoney(pnl)}, ${count} ${tradeWord(count)} — ver lista`
+              : has
+                ? `${day} de ${monthNameLower}, ${signedMoney(pnl)}, ${count} ${tradeWord(count)}`
+                : `${day} de ${monthNameLower}, sin operaciones, registrar`
+
           return (
             <Link key={day} href={href} aria-label={ariaLabel} className={className}>
-              <span className="text-[11.5px] text-neutral-400 tabular-nums">{day}</span>
+              {daySpan}
               {has ? (
                 <>
                   <span

@@ -31,9 +31,9 @@ export const WIZARD_STEPS = ['Datos', 'Riesgo y resultado', 'Estrategia', 'Bitá
 export const EDIT_TABS = ['Datos', 'Bitácora'] as const
 
 export const DATOS_FIELDS: FieldDef[] = [
-  { name: 'asset', label: 'Activo', kind: 'text', uppercase: true },
-  { name: 'market', label: 'Mercado', kind: 'select', options: MARKET_OPTIONS },
-  { name: 'tradeDate', label: 'Fecha', kind: 'date' },
+  { name: 'asset', label: 'Activo', kind: 'text', uppercase: true, required: true },
+  { name: 'market', label: 'Mercado', kind: 'select', options: MARKET_OPTIONS, required: true },
+  { name: 'tradeDate', label: 'Fecha', kind: 'date', required: true },
   { name: 'entryTime', label: 'Hora de entrada', kind: 'time' },
   { name: 'exitTime', label: 'Hora de salida', kind: 'time' },
   { name: 'entryPrice', label: 'Precio de entrada', kind: 'number' },

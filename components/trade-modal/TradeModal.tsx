@@ -5,6 +5,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { z } from 'zod'
 import { createTrade, removeTrade, updateTrade } from '@/lib/actions/trades'
 import { uploadCapture } from '@/lib/actions/captures'
+import { formatLongDate } from '@/lib/format'
+import { FeedbackSection } from './FeedbackSection'
+import { EMOTIONS, PHASES } from '@/lib/emotions'
 import {
   DATOS_FIELDS,
   EDIT_TABS,
@@ -16,9 +19,12 @@ import {
   stepForField,
 } from './steps'
 import { DirectionToggle, FieldGrid, FormField, SectionTitle, type FormState, type TradeFieldName } from './fields'
+import { PHASE_LABELS } from './EmotionPicker'
 import {
+  CAPTURE_DEFS,
   EMPTY_JOURNAL,
   JournalSection,
+  QUESTIONS,
   type CapturePhase,
   type ExistingCapture,
   type JournalFormState,
@@ -28,18 +34,6 @@ import {
 const CAPTURE_WARNING_MSG = 'La operación se guardó, pero una captura falló. Puedes reintentarla al editar.'
 const ERROR_INESPERADO = 'Ocurrió un error inesperado. Intenta de nuevo.'
 const ERROR_GUARDANDO_BITACORA = 'No se pudo guardar la bitácora. Intenta de nuevo antes de cerrar.'
-
-const MONTH_NAMES_LOWER = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-]
-
-/** '2026-08-03' -> '3 de agosto, 2026'. Devuelve la entrada tal cual si no tiene forma de fecha. */
-function formatLongDate(ymd: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd
-  const [y, m, d] = ymd.split('-').map(Number)
-  return `${d} de ${MONTH_NAMES_LOWER[m - 1]}, ${y}`
-}
 
 /** Trade + relaciones ya convertidas a un objeto plano y serializable para pasar del Gate (server) a este client component. */
 export interface EditableTrade {
@@ -66,6 +60,11 @@ export interface EditableTrade {
   entryType: string | null
   confirmations: string | null
   journal: JournalFormState
+  /** `updatedAt` del journal (ISO string) tal como lo guardó `TradeModalGate` — pasa a
+   * `JournalSection` para que compare contra un stash local (`stashAndDiscard`, ver el paso 3
+   * del brief de Task 5) y decida si ofrecer restaurarlo. `null` si el journal no existiera
+   * (en la práctica siempre existe, ver `insertTradeWithJournal`). */
+  journalUpdatedAt: string | null
   captures: ExistingCapture[]
 }
 
@@ -127,7 +126,21 @@ function tradeToForm(t: EditableTrade): FormState {
   }
 }
 
-type TradeModalProps = { mode: 'create'; defaultDate: string } | { mode: 'edit'; detail: EditableTrade }
+type TradeModalProps = ({ mode: 'create'; defaultDate: string } | { mode: 'edit'; detail: EditableTrade }) & {
+  /** Modo mentor (Task 12): deshabilita todos los inputs (`<fieldset disabled>`), oculta
+   * Guardar/Eliminar/Continuar (el footer solo muestra Cerrar) y la Bitácora se renderiza
+   * como texto en vez del formulario editable (ver `ReadOnlyJournal`). En la práctica solo
+   * llega en `true` junto con `mode: 'edit'` — `TradeModalGate` nunca abre `mode: 'create'`
+   * para un mentor (`?nuevo` se ignora ahí), pero SIEMPRE pasa `readOnly` explícitamente en
+   * ambos call sites (obligatorio, no opcional) para que un caller nuevo no pueda olvidarlo
+   * y dejar un modal editable abierto por accidente en un contexto de solo lectura. */
+  readOnly: boolean
+  /** Id del estudiante dueño del trade — solo tiene sentido (y solo llega) junto con
+   * `readOnly: true` (modo mentor, Task 12): `ReadOnlyJournal` lo necesita para montar
+   * `FeedbackSection` (Task 16) con el destinatario correcto de `sendFeedback`.
+   * `undefined` en modo owner — el propio alumno viendo su trade nunca ve esa sección. */
+  studentId?: string
+}
 
 /**
  * Modal de operación. Crear = wizard de 4 pasos (Datos/Riesgo y resultado/Estrategia/
@@ -149,6 +162,10 @@ export function TradeModal(props: TradeModalProps) {
 
   const detail = props.mode === 'edit' ? props.detail : undefined
   const isCreate = props.mode === 'create'
+  // Solo verdadero junto a `detail` en la práctica (ver doc de `TradeModalProps.readOnly`) —
+  // `showReadOnlyJournal` más abajo revalida `detail !== undefined` de todos modos, sin
+  // asumir esa invariante desde aquí.
+  const { readOnly, studentId } = props
 
   // Solo tiene sentido en modo editar: llega tras un `createTrade` exitoso cuyas capturas
   // fallaron al subir (ver `handleFinalSubmit`), que redirige aquí mismo con este query
@@ -175,7 +192,15 @@ export function TradeModal(props: TradeModalProps) {
   const [uploadingCaptures, setUploadingCaptures] = useState(false)
   const journalRef = useRef<JournalSectionHandle>(null)
 
+  // Fallos CONSECUTIVOS de flush del autoguardado de la Bitácora, reportados por
+  // `JournalSection` vía `onFlushFailure` (0 tras cualquier éxito). A partir de 2, se ofrece
+  // "Descartar cambios y cerrar" (ver `handleDiscardAndClose`) junto al `formError` — la
+  // única vía deliberada de cerrar con texto sin guardar (excepción documentada al invariante
+  // de close-abort de Task 14, ver doc de `requestClose`).
+  const [flushFailures, setFlushFailures] = useState(0)
+
   const contentRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   // true en cuanto el usuario escribe algo directamente en R múltiple; se resetea si lo
   // vuelve a dejar vacío. Mientras sea false, el autocálculo de `updateField` puede seguir
@@ -219,11 +244,55 @@ export function TradeModal(props: TradeModalProps) {
     contentRef.current?.querySelector<HTMLElement>('input, select, textarea')?.focus()
   }, [])
 
-  // Escape cierra el modal. `close` se lee vía ref para no reenganchar el listener en cada render.
+  // Escape cierra el modal. `close` se lee vía ref para no reenganchar el listener en cada
+  // render. El mismo listener también implementa el focus trap del diálogo: Tab/Shift+Tab en
+  // los bordes de la lista de focusables cicla al otro extremo en vez de escapar hacia la
+  // página de debajo (que sigue en el DOM detrás del backdrop). La lista de focusables se
+  // recalcula en cada Tab (no se cachea): es barata (un `querySelectorAll` acotado al
+  // diálogo) y así queda correcta sin importar qué paso/pestaña esté activo en ese momento
+  // — cambiar de paso monta/desmonta secciones enteras, así que una lista cacheada al montar
+  // quedaría obsoleta en cuanto el usuario avanzara el wizard o cambiara de pestaña.
   const closeRef = useRef<() => void>(() => {})
   useEffect(() => {
+    function getFocusables(dialog: HTMLElement): HTMLElement[] {
+      const candidates = dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      // `offsetParent === null` descarta lo oculto por `display:none` (p. ej. los pasos del
+      // wizard no activos, o `JournalSection` cuando su pestaña no está activa) — un
+      // elemento así no es alcanzable con Tab en un navegador real, así que tampoco debe
+      // contar para el ciclo. También descarta lo deshabilitado, que no puede recibir foco.
+      return Array.from(candidates).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null)
+    }
+
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') closeRef.current()
+      if (e.key === 'Escape') {
+        closeRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusables = getFocusables(dialog)
+      if (focusables.length === 0) return
+
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+      const activeIndex = active instanceof HTMLElement ? focusables.indexOf(active) : -1
+
+      if (e.shiftKey) {
+        // En el primero (o con el foco fuera del diálogo, `activeIndex === -1`): envuelve al
+        // último en vez de dejar que Shift+Tab se escape hacia atrás de la página.
+        if (activeIndex <= 0) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else if (activeIndex === -1 || activeIndex === focusables.length - 1) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
@@ -267,6 +336,34 @@ export function TradeModal(props: TradeModalProps) {
   useEffect(() => {
     closeRef.current = requestClose
   })
+
+  /**
+   * Escapatoria deliberada al invariante de `requestClose` de arriba: solo se ofrece
+   * (ver el botón en el JSX, condicionado a `flushFailures >= 2`) cuando el autoguardado de
+   * la Bitácora lleva 2+ fallos consecutivos — en ese punto, seguir bloqueando el cierre
+   * atraparía al usuario con un modal que no puede cerrar mientras el guardado no se
+   * recupere. En vez de reintentar, `stashAndDiscard()` deja el texto sin guardar en
+   * `localStorage` (recuperable al reabrir este trade, ver `JournalSection`) y cierra sin
+   * condiciones — la ÚNICA vía que puede cerrar con texto sin confirmar en pantalla.
+   */
+  function handleDiscardAndClose() {
+    journalRef.current?.stashAndDiscard()
+    close()
+  }
+
+  /**
+   * `JournalSection` se monta con `display:none` cuando su pestaña no está activa — en modo
+   * editar, `tab` arranca en 0 (Datos), así que un stash de recuperación detectado al montar
+   * (ver `JournalSection`'s mount effect) quedaría en un subárbol oculto y la barra
+   * "Restaurar/Descartar" nunca llegaría a verse. Mismo patrón que ya usa `captureWarning`
+   * más arriba para saltar a la pestaña Bitácora — la diferencia es que esa detección puede
+   * hacerse de forma síncrona en el render (viene de `searchParams`) mientras que esta solo
+   * se sabe tras un efecto de montaje que lee `localStorage` (no hay forma SSR-safe de
+   * saberlo antes), así que hay un parpadeo de un frame Datos->Bitácora en vez de cero.
+   */
+  function handleStashDetected() {
+    if (!isCreate) setTab(1)
+  }
 
   function updateField(name: TradeFieldName, value: string) {
     setFieldErrors((prev) => {
@@ -465,10 +562,116 @@ export function TradeModal(props: TradeModalProps) {
   const showEstrategia = isCreate ? step === 2 : tab === 0
   const showBitacora = isCreate ? step === 3 : tab === 1
 
-  const title = !detail ? 'Registrar operación' : form.setup ? `${form.asset} · ${form.setup}` : form.asset
+  // Fallback si el título computado quedara vacío (p. ej. editando un trade cuyo `asset` el
+  // usuario acaba de borrar del todo, antes de volver a escribir algo) — sin esto,
+  // `aria-labelledby="trademodal-title"` apuntaría a un nodo sin texto y el diálogo quedaría
+  // sin nombre accesible para un lector de pantalla.
+  const computedTitle = !detail ? 'Registrar operación' : form.setup ? `${form.asset} · ${form.setup}` : form.asset
+  const title = computedTitle || 'Registrar operación'
   const dateLine = !detail
     ? `Nuevo registro · ${formatLongDate(form.tradeDate)}`
     : `${formatLongDate(form.tradeDate)} · ${marketLabel(form.market)}${form.timeframe ? ` · ${form.timeframe}` : ''}`
+
+  // Extraído para no duplicar estas 3 secciones: en modo editar viven dentro de un único
+  // `role="tabpanel"` (las 3 comparten la misma condición `tab === 0`, ver `showDatos`/
+  // `showRiesgo`/`showEstrategia` arriba); en modo crear, cada una es un paso independiente
+  // del wizard y no necesita ese wrapper (ver más abajo, en el JSX).
+  //
+  // El `<fieldset disabled={readOnly}>` (Task 12, modo mentor) deshabilita TODOS los
+  // controles de formulario descendientes (`input`/`select`/los `<button>` del segmentado
+  // Long/Short de `DirectionToggle`) de una sola vez — sin `.btn`/`.input:disabled` en
+  // `nocturne.css` para ninguno de esos elementos, no hay dimming/gris inesperado: el
+  // segmentado sigue mostrando su color activo (viene de `style` inline según `value`, no de
+  // `:disabled`) tal cual lo vería el alumno, solo que ya no responde a click. `display:
+  // contents` saca la caja del fieldset del flujo (sin afectar el `gap` del contenedor
+  // flex/grid que lo envuelve); `disabled={false}` (owner) lo deja completamente inerte.
+  const datosRiesgoEstrategiaSections = (
+    <fieldset disabled={readOnly} style={{ display: 'contents', border: 0, margin: 0, padding: 0 }}>
+      {showDatos && (
+        <section className="flex flex-col gap-[12px]">
+          <SectionTitle>Información básica</SectionTitle>
+          <FieldGrid>
+            {DATOS_FIELDS.map((f) => (
+              <FormField
+                key={f.name}
+                field={f}
+                value={form[f.name]}
+                onChange={(v) => updateField(f.name, v)}
+                errors={fieldErrors[f.name]}
+              />
+            ))}
+            <DirectionToggle value={form.direction} onChange={(v) => updateField('direction', v)} />
+          </FieldGrid>
+        </section>
+      )}
+
+      {showRiesgo && (
+        <section className="flex flex-col gap-[12px]">
+          <SectionTitle>Gestión del riesgo y resultado</SectionTitle>
+          <FieldGrid>
+            {RIESGO_FIELDS.map((f) => (
+              <FormField
+                key={f.name}
+                field={f}
+                value={form[f.name]}
+                onChange={(v) => updateField(f.name, v)}
+                errors={fieldErrors[f.name]}
+              />
+            ))}
+          </FieldGrid>
+        </section>
+      )}
+
+      {showEstrategia && (
+        <section className="flex flex-col gap-[12px]">
+          <SectionTitle>Información estratégica</SectionTitle>
+          <FieldGrid>
+            {ESTRATEGIA_FIELDS.map((f) => (
+              <FormField
+                key={f.name}
+                field={f}
+                value={form[f.name]}
+                onChange={(v) => updateField(f.name, v)}
+                errors={fieldErrors[f.name]}
+              />
+            ))}
+          </FieldGrid>
+        </section>
+      )}
+    </fieldset>
+  )
+
+  // Modo mentor (Task 12): la Bitácora se renderiza como texto de solo lectura
+  // (`ReadOnlyJournal`), no `JournalSection` — ese componente autoguarda y sube/borra
+  // capturas mediante Server Actions gateadas por dueño (`saveJournal`/`uploadCapture`/
+  // `deleteCapture`, todas `requireUser()` contra el trade), que no aplican — ni deberían
+  // intentarse — para un mentor viendo el trade de otra persona. `detail !== undefined` es
+  // redundante con `readOnly` en la práctica (ver doc de `TradeModalProps.readOnly`), pero se
+  // revalida aquí para no asumir esa invariante.
+  const journalSectionEl = readOnly && detail ? (
+    <ReadOnlyJournal
+      journal={detail.journal}
+      captures={detail.captures}
+      hidden={!showBitacora}
+      tradeId={detail.id}
+      studentId={studentId}
+    />
+  ) : (
+    <JournalSection
+      ref={journalRef}
+      hidden={!showBitacora}
+      tradeId={detail?.id}
+      initial={detail ? detail.journal : journal}
+      captures={detail?.captures ?? []}
+      onChange={isCreate ? setJournal : undefined}
+      pendingCaptures={isCreate ? pendingCaptures : undefined}
+      onPendingCapturesChange={isCreate ? setPendingCaptures : undefined}
+      notice={captureWarning ? CAPTURE_WARNING_MSG : null}
+      onFlushFailure={setFlushFailures}
+      journalUpdatedAt={detail?.journalUpdatedAt ?? null}
+      onStashDetected={handleStashDetected}
+    />
+  )
 
   return (
     <>
@@ -477,7 +680,8 @@ export function TradeModal(props: TradeModalProps) {
           position: fixed; inset: 0; z-index: 60;
           display: flex; align-items: flex-start; justify-content: center;
           padding: 44px 20px; overflow: auto;
-          background: color-mix(in oklab, var(--color-neutral-900) 72%, transparent);
+          overscroll-behavior: contain;
+          background: color-mix(in oklab, var(--scrim-base) 72%, transparent);
           backdrop-filter: blur(3px);
         }
         .trademodal-dialog {
@@ -487,15 +691,20 @@ export function TradeModal(props: TradeModalProps) {
           display: flex; flex-direction: column; overflow: hidden;
           animation: smRise .22s ease both;
         }
-        .trademodal-content { overflow-y: auto; }
+        .trademodal-content { overflow-y: auto; overscroll-behavior: contain; }
         @media (max-width: 639px) {
-          .trademodal-backdrop { padding: 0; align-items: stretch; }
-          .trademodal-dialog { width: 100%; height: 100%; max-height: 100%; border-radius: 0; border: 0; }
+          /* Hoja a pantalla completa con UN solo contenedor de scroll (el
+             contenido): el backdrop deja de scrollear para que el teclado en
+             pantalla no desplace el dialogo entero, y 100dvh lo ancla al
+             viewport dinamico (la barra del navegador ya no lo redimensiona). */
+          .trademodal-backdrop { padding: 0; align-items: stretch; overflow: hidden; }
+          .trademodal-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
         }
       `}</style>
 
       <div className="trademodal-backdrop" onClick={() => void requestClose()}>
         <div
+          ref={dialogRef}
           className="trademodal-dialog"
           role="dialog"
           aria-modal="true"
@@ -524,13 +733,17 @@ export function TradeModal(props: TradeModalProps) {
             </button>
           </div>
 
-          <div className="flex gap-1 px-[22px] pt-[12px]">
+          <div className="flex gap-1 px-[22px] pt-[12px]" role={isCreate ? undefined : 'tablist'}>
             {(isCreate ? WIZARD_STEPS : EDIT_TABS).map((label, i) => {
               const active = isCreate ? step === i : tab === i
               return (
                 <button
                   key={label}
                   type="button"
+                  role={isCreate ? undefined : 'tab'}
+                  aria-selected={isCreate ? undefined : active}
+                  aria-controls={isCreate ? undefined : `trademodal-panel-${i}`}
+                  id={isCreate ? undefined : `trademodal-tab-${i}`}
                   onClick={() => {
                     disarmDelete()
                     if (isCreate) setStep(i)
@@ -562,120 +775,219 @@ export function TradeModal(props: TradeModalProps) {
           </div>
 
           <div ref={contentRef} className="trademodal-content flex flex-col gap-[20px] px-[22px] py-[18px]">
-            {showDatos && (
-              <section className="flex flex-col gap-[12px]">
-                <SectionTitle>Información básica</SectionTitle>
-                <FieldGrid>
-                  {DATOS_FIELDS.map((f) => (
-                    <FormField
-                      key={f.name}
-                      field={f}
-                      value={form[f.name]}
-                      onChange={(v) => updateField(f.name, v)}
-                      errors={fieldErrors[f.name]}
-                    />
-                  ))}
-                  <DirectionToggle value={form.direction} onChange={(v) => updateField('direction', v)} />
-                </FieldGrid>
-              </section>
+            {isCreate ? (
+              datosRiesgoEstrategiaSections
+            ) : (
+              <div
+                role="tabpanel"
+                id="trademodal-panel-0"
+                aria-labelledby="trademodal-tab-0"
+                hidden={tab !== 0}
+                className="flex flex-col gap-[20px]"
+              >
+                {datosRiesgoEstrategiaSections}
+              </div>
             )}
 
-            {showRiesgo && (
-              <section className="flex flex-col gap-[12px]">
-                <SectionTitle>Gestión del riesgo y resultado</SectionTitle>
-                <FieldGrid>
-                  {RIESGO_FIELDS.map((f) => (
-                    <FormField
-                      key={f.name}
-                      field={f}
-                      value={form[f.name]}
-                      onChange={(v) => updateField(f.name, v)}
-                      errors={fieldErrors[f.name]}
-                    />
-                  ))}
-                </FieldGrid>
-              </section>
+            {isCreate ? (
+              journalSectionEl
+            ) : (
+              <div role="tabpanel" id="trademodal-panel-1" aria-labelledby="trademodal-tab-1" hidden={tab !== 1}>
+                {journalSectionEl}
+              </div>
             )}
 
-            {showEstrategia && (
-              <section className="flex flex-col gap-[12px]">
-                <SectionTitle>Información estratégica</SectionTitle>
-                <FieldGrid>
-                  {ESTRATEGIA_FIELDS.map((f) => (
-                    <FormField
-                      key={f.name}
-                      field={f}
-                      value={form[f.name]}
-                      onChange={(v) => updateField(f.name, v)}
-                      errors={fieldErrors[f.name]}
-                    />
-                  ))}
-                </FieldGrid>
-              </section>
-            )}
-
-            <JournalSection
-              ref={journalRef}
-              hidden={!showBitacora}
-              tradeId={detail?.id}
-              initial={detail ? detail.journal : journal}
-              captures={detail?.captures ?? []}
-              onChange={isCreate ? setJournal : undefined}
-              pendingCaptures={isCreate ? pendingCaptures : undefined}
-              onPendingCapturesChange={isCreate ? setPendingCaptures : undefined}
-              notice={captureWarning ? CAPTURE_WARNING_MSG : null}
-            />
-
-            {formError && (
-              <p role="alert" className="text-neg m-0" style={{ fontSize: '12px' }}>
-                {formError}
-              </p>
+            {(formError || flushFailures >= 2) && (
+              <div className="flex flex-wrap items-center gap-[10px]">
+                {formError && (
+                  <p role="alert" className="text-neg m-0" style={{ fontSize: '12px' }}>
+                    {formError}
+                  </p>
+                )}
+                {flushFailures >= 2 && (
+                  <button
+                    type="button"
+                    onClick={handleDiscardAndClose}
+                    className="btn btn-ghost text-[12px]"
+                    style={{ color: 'var(--neg)' }}
+                  >
+                    Descartar cambios y cerrar
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
           <div className="flex items-center gap-[10px] border-t border-neutral-800 px-[22px] py-[14px]">
-            {detail ? (
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                disabled={isPending}
-                className="btn btn-ghost text-[12px]"
-                style={{ color: 'var(--neg)' }}
-              >
-                {confirmDelete ? '¿Seguro? Eliminar definitivamente' : 'Eliminar'}
-              </button>
+            {readOnly ? (
+              // Modo mentor (Task 12): el footer solo muestra Cerrar — nada que guardar, nada
+              // que eliminar (`requestClose` sigue siendo la vía correcta: intenta un flush de
+              // la Bitácora antes de navegar, no-op aquí porque `journalRef` nunca se adjunta
+              // cuando se renderiza `ReadOnlyJournal` en vez de `JournalSection`).
+              <div className="ml-auto flex gap-[8px]">
+                <button type="button" onClick={() => void requestClose()} className="btn btn-ghost text-[12px]">
+                  Cerrar
+                </button>
+              </div>
             ) : (
-              <span className="text-[11.5px] text-neutral-500">Se guarda al finalizar</span>
-            )}
+              <>
+                {detail ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    disabled={isPending}
+                    className="btn btn-ghost text-[12px]"
+                    style={{ color: 'var(--neg)' }}
+                  >
+                    {confirmDelete ? '¿Seguro? Eliminar definitivamente' : 'Eliminar'}
+                  </button>
+                ) : (
+                  <span className="text-[11.5px] text-neutral-500">Se guarda al finalizar</span>
+                )}
 
-            <div className="ml-auto flex gap-[8px]">
-              <button type="button" onClick={() => void requestClose()} className="btn btn-ghost text-[12px]">
-                Cancelar
-              </button>
-              {isCreate && step < WIZARD_STEPS.length - 1 ? (
-                <button type="button" onClick={handleContinue} className="btn btn-primary text-[12px]" disabled={isPending}>
-                  Continuar
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleFinalSubmit}
-                  className="btn btn-primary text-[12px]"
-                  disabled={isPending}
-                >
-                  {isPending
-                    ? uploadingCaptures
-                      ? 'Subiendo capturas…'
-                      : 'Guardando…'
-                    : isCreate
-                      ? 'Guardar operación'
-                      : 'Guardar cambios'}
-                </button>
-              )}
-            </div>
+                <div className="ml-auto flex gap-[8px]">
+                  <button type="button" onClick={() => void requestClose()} className="btn btn-ghost text-[12px]">
+                    Cancelar
+                  </button>
+                  {isCreate && step < WIZARD_STEPS.length - 1 ? (
+                    <button type="button" onClick={handleContinue} className="btn btn-primary text-[12px]" disabled={isPending}>
+                      Continuar
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleFinalSubmit}
+                      className="btn btn-primary text-[12px]"
+                      disabled={isPending}
+                    >
+                      {isPending
+                        ? uploadingCaptures
+                          ? 'Subiendo capturas…'
+                          : 'Guardando…'
+                        : isCreate
+                          ? 'Guardar operación'
+                          : 'Guardar cambios'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Bitácora en modo solo lectura (mentor, Task 12) — mismo layout visual que
+ * `JournalSection` (mismas preguntas/etiquetas, vía `QUESTIONS`/`CAPTURE_DEFS` exportados
+ * de ahí, y las mismas fases/etiquetas de emoción, vía `PHASE_LABELS` exportado de
+ * `EmotionPicker`) pero sin ningún control editable: texto en bloques (`<p>`, no
+ * `<textarea>`), chips de emoción `aria-disabled` (sin `onClick`, sin autoguardado) y
+ * capturas mostradas sin las affordances de subir/eliminar (ni zona de drop, ni botón
+ * "Eliminar" — solo la imagen, o "Sin captura" si esa fase no tiene una).
+ *
+ * No reusa `JournalSection` directamente: ese componente autoguarda (`saveJournal`) y
+ * sube/borra capturas (`uploadCapture`/`deleteCapture`) mediante Server Actions gateadas por
+ * dueño (`requireUser()` contra el trade) — llamadas que fallarían, o que ni siquiera
+ * deberían intentarse, para un mentor viendo el trade de un alumno.
+ */
+function ReadOnlyJournal({
+  journal,
+  captures,
+  hidden,
+  tradeId,
+  studentId,
+}: {
+  journal: JournalFormState
+  captures: ExistingCapture[]
+  hidden: boolean
+  tradeId: string
+  /** `undefined` solo en teoría (ver doc de `TradeModalProps.studentId`) — se revalida
+   * aquí de todos modos, mismo criterio defensivo que el resto de este componente, en vez
+   * de asumir la invariante "readOnly implica studentId definido". */
+  studentId: string | undefined
+}) {
+  // `v` de cache-busting para las imágenes de captura (mismo motivo que `CaptureSlot`, ver su
+  // doc): sin él, el cache del navegador/CDN de `get()` podría servir bytes de una re-subida
+  // anterior bajo la misma URL. Un único valor por montaje (no uno por captura) alcanza aquí:
+  // a diferencia de `CaptureSlot`, esta vista es de solo lectura y nunca sube nada que
+  // necesite invalidar el cache a mitad de sesión. Inicializador perezoso de `useState` (no
+  // `useMemo`, que `react-hooks/purity` marca como impuro incluso memoizado) — mismo patrón
+  // que el `Date.now()` por captura en el inicializador de `captureState` de `JournalSection`.
+  const [v] = useState(() => Date.now())
+
+  return (
+    <section className="flex flex-col gap-[14px]" style={hidden ? { display: 'none' } : undefined}>
+      <div className="flex flex-wrap items-baseline gap-[10px]">
+        <h3 className="m-0 text-[11px] tracking-[0.13em] uppercase text-neutral-500">Bitácora de la operación</h3>
+      </div>
+
+      <div className="grid gap-[12px]" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+        {QUESTIONS.map((q) => (
+          <div key={q.name} className="flex flex-col gap-[6px]">
+            <span className="text-[11.5px] text-neutral-300">{q.label}</span>
+            <p className="input m-0" style={{ minHeight: '90px', whiteSpace: 'pre-wrap' }}>
+              {journal[q.name] || '—'}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-[9px]">
+        <span className="text-[11.5px] text-neutral-300">Estado emocional</span>
+        <div className="flex flex-col gap-[9px]">
+          {PHASES.map((phase) => (
+            <div key={phase} className="flex flex-wrap items-center gap-[10px]">
+              <span className="w-[70px] flex-none text-[11px] text-neutral-500">{PHASE_LABELS[phase]}</span>
+              {EMOTIONS.map((emotion) => {
+                const active = journal.emotions[phase].includes(emotion)
+                return (
+                  <span
+                    key={emotion}
+                    aria-disabled="true"
+                    className="rounded-[20px] px-[11px] py-[5px] text-[11.5px]"
+                    style={{
+                      border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-neutral-700)'}`,
+                      background: active ? 'var(--color-accent-900)' : 'transparent',
+                      color: active ? 'var(--color-accent-200)' : 'var(--color-neutral-400)',
+                    }}
+                  >
+                    {emotion}
+                  </span>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-[12px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        {CAPTURE_DEFS.map((c) => {
+          const existing = captures.find((cap) => cap.phase === c.phase)
+          return (
+            <div
+              key={c.phase}
+              className="relative flex h-[150px] flex-col items-center justify-center gap-[6px] overflow-hidden rounded-[10px]"
+              style={{ border: '1px dashed var(--color-neutral-700)', background: 'var(--color-neutral-800)' }}
+            >
+              {existing ? (
+                // eslint-disable-next-line @next/next/no-img-element -- captura privada autenticada, no un asset estático de next/image
+                <img
+                  src={`/api/captures/${existing.id}?v=${v}`}
+                  alt={c.label}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-[12px] text-neutral-400">{c.label} · sin captura</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {studentId ? <FeedbackSection studentId={studentId} tradeId={tradeId} /> : null}
+    </section>
   )
 }

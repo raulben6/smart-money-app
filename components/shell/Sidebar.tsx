@@ -3,20 +3,36 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
-import { ChartLineUp, CalendarBlank } from '@phosphor-icons/react'
+import { ChartLineUp, CalendarBlank, Bell, Target, Medal } from '@phosphor-icons/react'
 import { Brand } from './Brand'
+import { NotificationBadge } from './NotificationBadge'
+import { ThemeToggle } from './ThemeToggle'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', Icon: ChartLineUp },
   { href: '/calendario', label: 'Calendario', Icon: CalendarBlank },
+  { href: '/notificaciones', label: 'Notificaciones', Icon: Bell },
+  { href: '/objetivos', label: 'Objetivos', Icon: Target },
+  { href: '/mi-nivel', label: 'Mi nivel', Icon: Medal },
 ] as const
 
 /** Sidebar de escritorio (≥1024px). Ver mockup líneas 27-64. */
-export function Sidebar({ name, initials }: { name: string; initials: string }) {
+export function Sidebar({
+  name,
+  initials,
+  unreadCount,
+  levelName,
+}: {
+  name: string
+  initials: string
+  unreadCount: number
+  /** Nivel EN CURSO del estudiante, ya resuelto server-side (lib/level-status). */
+  levelName: string
+}) {
   const pathname = usePathname()
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-[22px] border-r border-neutral-800 px-[14px] py-[20px] lg:flex">
+    <aside className="sidebar-scope sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-[22px] bg-sidebar px-[14px] py-[20px] lg:flex">
       <Brand />
 
       <nav aria-label="Navegación principal" className="flex flex-col gap-0.5">
@@ -35,6 +51,7 @@ export function Sidebar({ name, initials }: { name: string; initials: string }) 
             >
               <Icon size={16} aria-hidden className="shrink-0" />
               <span>{label}</span>
+              {href === '/notificaciones' ? <NotificationBadge count={unreadCount} className="ml-auto" /> : null}
             </Link>
           )
         })}
@@ -47,9 +64,10 @@ export function Sidebar({ name, initials }: { name: string; initials: string }) 
           </div>
           <div className="flex min-w-0 flex-col leading-[1.25]">
             <span className="truncate text-[12px] text-text">{name}</span>
-            <span className="text-[10.5px] text-neutral-500">Nivel —</span>
+            <span className="truncate text-[10.5px] text-neutral-500">{levelName}</span>
           </div>
         </div>
+        <ThemeToggle />
         <UserButton appearance={{ elements: { avatarBox: 'h-6 w-6' } }} />
       </div>
     </aside>

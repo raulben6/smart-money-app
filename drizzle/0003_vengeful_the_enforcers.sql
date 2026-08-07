@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "notifications_levelup_unique" ON "notifications" USING btree ("user_id","title") WHERE kind = 'felicitacion' AND title LIKE '¡Felicidades! Superaste el nivel %';

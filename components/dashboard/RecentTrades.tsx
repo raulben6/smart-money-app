@@ -1,16 +1,22 @@
 import Link from 'next/link'
 import type { DbTrade } from '@/lib/db/schema'
-import { signedMoney } from '@/lib/format'
+import { signedMoney, formatDayMonth } from '@/lib/format'
 
 const LINK_STYLE = { display: 'block', color: 'inherit', textDecoration: 'none' } as const
 
-/** Tabla de últimas operaciones. Cada celda enlaza a `/dashboard?trade=<id>` (Gate del Task 13). Ver mockup líneas 165-188, 659-666. */
-export function RecentTrades({ trades }: { trades: DbTrade[] }) {
+/**
+ * Tabla de últimas operaciones. Cada celda enlaza a `${basePath}?trade=<id>` (Gate del
+ * Task 13) — `basePath` la resuelve `DashboardView` ('/dashboard' para el alumno,
+ * '/estudiantes/[id]/dashboard' para la vista de mentor, Task 12). `calendarHref` es la
+ * ruta del calendario equivalente para "Ver calendario", ya resuelta por el padre. Ver
+ * mockup líneas 165-188, 659-666.
+ */
+export function RecentTrades({ trades, basePath, calendarHref }: { trades: DbTrade[]; basePath: string; calendarHref: string }) {
   return (
     <div className="card" style={{ padding: '18px 20px', gap: '12px' }}>
       <div className="flex items-baseline">
         <h2 style={{ margin: 0, fontSize: '14px' }}>Últimas operaciones</h2>
-        <Link href="/calendario" className="btn btn-ghost ml-auto" style={{ fontSize: '11.5px', padding: '5px 9px' }}>
+        <Link href={calendarHref} className="btn btn-ghost ml-auto" style={{ fontSize: '11.5px', padding: '5px 9px' }}>
           Ver calendario
         </Link>
       </div>
@@ -19,6 +25,7 @@ export function RecentTrades({ trades }: { trades: DbTrade[] }) {
         <table className="table" style={{ width: '100%', fontSize: '12px' }}>
           <thead>
             <tr>
+              <th scope="col" className="text-left">Fecha</th>
               <th scope="col" className="text-left">Activo</th>
               <th scope="col" className="text-left">Dir.</th>
               <th scope="col" className="text-left">Setup</th>
@@ -33,10 +40,15 @@ export function RecentTrades({ trades }: { trades: DbTrade[] }) {
               const pnlColor = positive ? 'var(--pos)' : 'var(--neg)'
               const dirColor = isLong ? 'var(--pos)' : 'var(--neg)'
               const dirBorder = `color-mix(in oklab, ${dirColor} 45%, transparent)`
-              const href = `/dashboard?trade=${t.id}`
+              const href = `${basePath}?trade=${t.id}`
 
               return (
                 <tr key={t.id}>
+                  <td className="whitespace-nowrap tabular-nums" style={{ color: 'var(--color-neutral-500)' }}>
+                    <Link href={href} style={LINK_STYLE}>
+                      {formatDayMonth(t.tradeDate)}
+                    </Link>
+                  </td>
                   <td className="tabular-nums">
                     <Link href={href} style={LINK_STYLE}>
                       {t.asset}

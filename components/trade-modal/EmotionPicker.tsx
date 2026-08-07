@@ -6,7 +6,8 @@ import type { JournalFormValues } from '@/lib/validation/trade'
 /** Forma del campo `emotions` del journal — un array (subconjunto de `EMOTIONS`) por fase. */
 export type EmotionsValue = JournalFormValues['emotions']
 
-const PHASE_LABELS: Record<Phase, string> = {
+/** Exportado para que el render de solo lectura de la Bitácora (`TradeModal`, modo mentor, Task 12) reuse las mismas etiquetas sin duplicarlas. */
+export const PHASE_LABELS: Record<Phase, string> = {
   antes: 'Antes',
   durante: 'Durante',
   despues: 'Después',

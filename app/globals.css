@@ -2,6 +2,9 @@
 @import "../styles/nocturne.css";
 
 :root { --pos: oklch(0.76 0.11 162); --neg: oklch(0.68 0.15 22); }
+/* --pos claro en #047857: se usa como TEXTO de P&L a 11-16px (AA); el relleno
+   esmeralda #059669 del mockup queda en --accent-fill. */
+:root[data-theme='light'] { --pos: #047857; --neg: #dc2626; }
 
 @theme inline {
   --color-bg: var(--color-bg);
@@ -28,6 +31,9 @@
   --color-neutral-900: var(--color-neutral-900);
   --color-pos: var(--pos);
   --color-neg: var(--neg);
+  --color-sidebar: var(--sidebar);
+  --color-on-accent: var(--color-on-accent);
+  --color-accent-fill: var(--accent-fill);
   --font-sans: var(--font-body);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
@@ -36,6 +42,6 @@
 
 html, body { background: var(--color-bg); color: var(--color-text); -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--color-neutral-800); border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
 @keyframes smRise { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 @keyframes smDraw { from { stroke-dashoffset: 1400 } to { stroke-dashoffset: 0 } }
