@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { DbTrade } from '@/lib/db/schema'
-import { signedMoney } from '@/lib/format'
+import { signedMoney, formatDayMonth } from '@/lib/format'
 
 const LINK_STYLE = { display: 'block', color: 'inherit', textDecoration: 'none' } as const
 
@@ -25,6 +25,7 @@ export function RecentTrades({ trades, basePath, calendarHref }: { trades: DbTra
         <table className="table" style={{ width: '100%', fontSize: '12px' }}>
           <thead>
             <tr>
+              <th scope="col" className="text-left">Fecha</th>
               <th scope="col" className="text-left">Activo</th>
               <th scope="col" className="text-left">Dir.</th>
               <th scope="col" className="text-left">Setup</th>
@@ -43,6 +44,11 @@ export function RecentTrades({ trades, basePath, calendarHref }: { trades: DbTra
 
               return (
                 <tr key={t.id}>
+                  <td className="whitespace-nowrap tabular-nums" style={{ color: 'var(--color-neutral-500)' }}>
+                    <Link href={href} style={LINK_STYLE}>
+                      {formatDayMonth(t.tradeDate)}
+                    </Link>
+                  </td>
                   <td className="tabular-nums">
                     <Link href={href} style={LINK_STYLE}>
                       {t.asset}
