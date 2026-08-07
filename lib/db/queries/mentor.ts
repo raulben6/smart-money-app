@@ -182,7 +182,10 @@ export async function setStudentStartLevel(
   const updated = await db
     .update(users)
     .set({ startLevelPosition, levelBaselineNet })
-    .where(and(eq(users.id, studentId), eq(users.role, 'student')))
+    // isNull(archivedAt): un archivado no es destino válido (auditoría final —
+    // sin este gate, asignarle nivel escribiría un baseline 0 corrupto porque
+    // listTradesForStudent sí filtra archivados y devolvería []).
+    .where(and(eq(users.id, studentId), eq(users.role, 'student'), isNull(users.archivedAt)))
     .returning({ id: users.id })
 
   return updated.length > 0

@@ -140,7 +140,8 @@ export type PanelSummary = {
 /**
  * Agregados de las 5 tarjetas de `/panel` (mockup líneas 811-817) a partir de las
  * `StudentStats` ya cargadas. Función pura — `todayISO` llega por parámetro
- * (`todayLocalISO()` en la página), nunca `Date.now()` aquí.
+ * (`todayAppISO()` en la página, zona del programa — ver lib/app-time.ts),
+ * nunca `Date.now()` aquí.
  */
 export function computePanelSummary(stats: StudentStats[], todayISO: string): PanelSummary {
   const studentCount = stats.length

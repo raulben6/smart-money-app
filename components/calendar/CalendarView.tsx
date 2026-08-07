@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { DbTrade } from '@/lib/db/schema'
 import { calendarAggregates } from '@/lib/metrics/periods'
 import { MONTH_NAMES_ES, money, pct } from '@/lib/format'
+import { todayAppISO } from '@/lib/app-time'
 import type { LevelStatus } from '@/lib/metrics/levels'
 import { levelGoalText } from '@/components/levels/LevelProgressCard'
 import { PageHeader } from '@/components/shell/PageHeader'
@@ -12,17 +13,22 @@ import { DayTradesPanel } from '@/components/calendar/DayTradesPanel'
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
 
-/** Año/mes válidos desde `searchParams` (enteros, año 2000-2100, mes 1-12); si faltan o son inválidos, el mes actual local. */
+/**
+ * Año/mes válidos desde `searchParams` (enteros, año 2000-2100, mes 1-12); si faltan o son
+ * inválidos, el mes actual EN LA ZONA DEL PROGRAMA (auditoría final: `new Date()` a secas
+ * usa la hora del proceso — UTC en producción — y el último día de cada mes por la tarde
+ * abría un calendario del mes siguiente vacío; mismo defecto raíz que la ronda 13).
+ */
 function resolveYearMonth(y: string | undefined, m: string | undefined): { year: number; month: number } {
-  const now = new Date()
+  const [todayYear, todayMonth] = todayAppISO().split('-').map(Number)
   const year = Number(y)
   const month = Number(m)
   const validYear = Number.isInteger(year) && year >= 2000 && year <= 2100
   const validMonth = Number.isInteger(month) && month >= 1 && month <= 12
 
   return {
-    year: validYear ? year : now.getFullYear(),
-    month: validMonth ? month : now.getMonth() + 1,
+    year: validYear ? year : todayYear,
+    month: validMonth ? month : todayMonth,
   }
 }
 

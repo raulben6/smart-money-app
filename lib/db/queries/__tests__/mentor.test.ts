@@ -671,6 +671,11 @@ describe('lib/db/queries — matriz de autorización de mentor', () => {
       expect(await setStudentStartLevel(db, mentor.id, mentor.id, 4, 0)).toBe(false)
       const [rowM] = await db.select().from(users).where(eq(users.id, mentor.id))
       expect(rowM.startLevelPosition).toBe(1)
+
+      // Un ARCHIVADO tampoco es destino (auditoría final: sin este gate se
+      // escribiría un baseline corrupto de 0).
+      await archiveStudentById(db, mentor.id, studentB.id)
+      expect(await setStudentStartLevel(db, mentor.id, studentB.id, 2, 0)).toBe(false)
     })
 
     it('insertLevelUpNotification (ronda 16): felicita una sola vez por POSICIÓN de nivel — renombrar el nivel no re-felicita, y el dedupe es atómico (índice único parcial)', async () => {

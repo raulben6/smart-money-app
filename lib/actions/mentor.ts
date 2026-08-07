@@ -30,6 +30,12 @@ const INVITACION_DUPLICADA = 'Ya existe una invitación para ese correo'
 function revalidateLevelViews() {
   revalidatePath('/niveles')
   revalidatePath('/mi-nivel')
+  // Las definiciones de nivel y los grants también alimentan el banner del
+  // calendario y el ranking del panel/comparador (auditoría final — alineado
+  // con el set que ya usaba assignStudentLevel).
+  revalidatePath('/calendario')
+  revalidatePath('/panel')
+  revalidatePath('/comparador')
 }
 
 /**

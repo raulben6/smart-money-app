@@ -5,6 +5,7 @@ import { computeSummary } from '@/lib/metrics/summary'
 import { equityPoints, buildLinePath } from '@/lib/metrics/equity'
 import { monthlyAggregates } from '@/lib/metrics/periods'
 import { formatDayMonth } from '@/lib/format'
+import { todayAppISO } from '@/lib/app-time'
 import { PageHeader } from '@/components/shell/PageHeader'
 import { HeroStats } from '@/components/dashboard/HeroStats'
 import { EquityCurve } from '@/components/dashboard/EquityCurve'
@@ -132,7 +133,11 @@ function DashboardBody({
   calendarHref: string
 }) {
   const summary = computeSummary(trades, initialBalance)
-  const now = new Date()
+  // Anclado al día calendario del PROGRAMA (auditoría final: `new Date()` a
+  // secas usa la hora del proceso — UTC en producción — y corría las ventanas
+  // de 30 días y de meses 6 horas; mismo defecto raíz que la ronda 13).
+  const [ty, tm, td] = todayAppISO().split('-').map(Number)
+  const now = new Date(ty, tm - 1, td)
 
   // Curva de equity: últimos 30 días; si no hay trades en la ventana, se usan todos.
   const windowStart = toYmd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (EQUITY_WINDOW_DAYS - 1)))
