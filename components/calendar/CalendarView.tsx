@@ -68,7 +68,12 @@ function LevelBanner({ status }: { status: LevelStatus }) {
 
   if (!next) {
     return (
-      <div className="card flex flex-wrap items-center gap-[14px]" style={{ padding: '15px 18px' }}>
+      // flexDirection inline: .card impone column y las utilidades de Tailwind
+      // (en @layer) no pueden anularla — ver nota en el banner principal.
+      <div
+        className="card items-center"
+        style={{ padding: '12px 16px', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 14px' }}
+      >
         <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13.5px' }}>
           Completaste todos los niveles del programa
         </span>
@@ -110,61 +115,70 @@ function LevelBanner({ status }: { status: LevelStatus }) {
 
   const nextAfter = status.perLevel.find((p) => p.level.position === next.position + 1)?.level ?? null
 
+  const teFaltanText =
+    nextAfter === null
+      ? 'Este es el último nivel definido — sigue así'
+      : missingParts.length > 0
+        ? `Te faltan ${missingParts.join(' y ')} para pasar al ${nextAfter.name}`
+        : `Cumple el resto de requisitos del nivel para pasar al ${nextAfter.name}`
+
   return (
-    <div className="card flex flex-wrap items-center gap-[20px]" style={{ padding: '15px 18px' }}>
-      <div className="flex flex-none items-center gap-[12px]">
+    // FRANJA compacta de UNA línea (rediseño ronda 15: el banner alto de 3
+    // filas desperdiciaba espacio). flexDirection va inline porque .card
+    // impone column y las utilidades de Tailwind (en @layer) no pueden anular
+    // CSS sin capa de nocturne.css — con las clases `flex flex-wrap` de antes
+    // el banner renderizaba en columna centrada sin que nadie lo notara.
+    <div
+      className="card items-center"
+      style={{ padding: '11px 16px', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 18px' }}
+    >
+      <div className="flex flex-none items-center gap-[10px]">
         <div
           className="flex items-center justify-center tabular-nums"
           style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
+            width: '30px',
+            height: '30px',
+            borderRadius: '8px',
             border: '1px solid var(--color-accent)',
             fontFamily: 'var(--font-heading)',
-            fontSize: '15px',
-            boxShadow: '0 0 18px -7px var(--color-accent)',
+            fontSize: '13px',
+            boxShadow: '0 0 14px -6px var(--color-accent)',
           }}
         >
           {next.position}
         </div>
-        <div className="flex flex-col" style={{ lineHeight: 1.3 }}>
-          <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13.5px' }}>
+        <div className="flex flex-col" style={{ lineHeight: 1.25 }}>
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: '12.5px' }}>
             Nivel {next.position} · {next.name}
           </span>
-          <span className="text-[11.5px] text-neutral-400">
-            Objetivo del nivel: {levelGoalText(next, { compact: true })}
+          <span className="text-[10.5px] text-neutral-400">
+            Objetivo: {levelGoalText(next, { compact: true })}
           </span>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-[7px]" style={{ minWidth: '220px' }}>
-        <div className="flex text-[11.5px] text-neutral-500 tabular-nums">
-          <span>
-            {money(status.progressAmount)} de {money(next.goalAmount)}
-          </span>
-          <span className="ml-auto text-neutral-300">{displayPct}%</span>
-        </div>
-        <div className="h-[7px] overflow-hidden rounded-[5px]" style={{ background: 'var(--color-neutral-800)' }}>
+      <div className="flex flex-1 flex-col gap-[5px]" style={{ minWidth: '240px' }}>
+        <div className="h-[6px] overflow-hidden rounded-[4px]" style={{ background: 'var(--color-neutral-800)' }}>
           <div
             style={{
               width: `${displayPct}%`,
               height: '100%',
-              borderRadius: '5px',
+              borderRadius: '4px',
               background: 'linear-gradient(90deg, var(--color-accent-600), var(--color-accent))',
               transition: 'width .5s ease',
             }}
           />
         </div>
-        <span className="text-[11px] text-neutral-500">
-          {nextAfter === null
-            ? 'Este es el último nivel definido — sigue así'
-            : missingParts.length > 0
-              ? `Te faltan ${missingParts.join(' y ')} para pasar al ${nextAfter.name}`
-              : `Cumple el resto de requisitos del nivel para pasar al ${nextAfter.name}`}
-        </span>
+        <div className="flex flex-wrap gap-x-[12px] text-[10.5px] text-neutral-500">
+          <span>{teFaltanText}</span>
+          <span className="ml-auto whitespace-nowrap tabular-nums">
+            {money(status.progressAmount)} de {money(next.goalAmount)} ·{' '}
+            <span className="text-neutral-300">{displayPct}%</span>
+          </span>
+        </div>
       </div>
 
-      <Link href="/mi-nivel" className="btn btn-ghost flex-none" style={{ fontSize: '11.5px', padding: '6px 11px' }}>
+      <Link href="/mi-nivel" className="btn btn-ghost flex-none" style={{ fontSize: '11.5px', padding: '5px 10px' }}>
         Ver mi nivel
       </Link>
     </div>
@@ -244,8 +258,12 @@ export function CalendarView({
         )}
       </PageHeader>
 
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[18px] px-[30px] pt-[22px] pb-[60px]">
         {!readOnly && levelBanner ? <LevelBanner status={levelBanner} /> : null}
+
+        {/* Resumen del mes ARRIBA del grid (rediseño ronda 15: "todo arriba
+            con mejor visibilidad"; antes cerraba la página bajo el calendario). */}
+        <MonthSummary summary={summary} />
 
         <div className="flex flex-wrap items-center gap-[14px]">
           <div className="flex items-center gap-[8px]">
@@ -302,8 +320,6 @@ export function CalendarView({
         </div>
 
         <MonthGrid year={year} month={month} days={days} trades={trades} basePath={basePath} readOnly={readOnly} />
-
-        <MonthSummary summary={summary} />
       </div>
 
       {showDayPanel && diaValida !== null ? (
