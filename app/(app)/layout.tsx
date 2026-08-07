@@ -6,6 +6,7 @@ import { getOwnLevelStatus, levelDisplayName } from '@/lib/level-status'
 import { initials } from '@/lib/format'
 import { Sidebar } from '@/components/shell/Sidebar'
 import { BottomNav } from '@/components/shell/BottomNav'
+import { AutoRefresh } from '@/components/shell/AutoRefresh'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser()
@@ -19,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
+      <AutoRefresh />
       <Sidebar
         name={user.name}
         initials={initials(user.name)}
