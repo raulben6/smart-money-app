@@ -69,8 +69,24 @@ function shiftMonth(year: number, month: number, delta: number): { year: number;
  * Si el alumno ya completó el último nivel (`status.next === null`), se muestra un
  * banner simple de felicitación en su lugar.
  */
-function LevelBanner({ status }: { status: LevelStatus }) {
+/** `link`: destino del botón del banner — '/mi-nivel' para el estudiante; la
+ *  administración de niveles del alumno (`/niveles?e=`) cuando lo ve el mentor
+ *  (ronda 18: el mentor también ve la barra de avance). `viewer` ajusta la voz
+ *  de los textos ("Te faltan…" vs "Le faltan…"). */
+function LevelBanner({
+  status,
+  link,
+  viewer,
+}: {
+  status: LevelStatus
+  link: { href: string; label: string }
+  viewer: 'student' | 'mentor'
+}) {
   const next = status.next
+  const completedLabel =
+    viewer === 'mentor'
+      ? 'Este estudiante completó todos los niveles del programa'
+      : 'Completaste todos los niveles del programa'
 
   if (!next) {
     return (
@@ -80,11 +96,9 @@ function LevelBanner({ status }: { status: LevelStatus }) {
         className="card items-center"
         style={{ padding: '12px 16px', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 14px' }}
       >
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13.5px' }}>
-          Completaste todos los niveles del programa
-        </span>
-        <Link href="/mi-nivel" className="btn btn-ghost ml-auto" style={{ fontSize: '11.5px', padding: '6px 11px' }}>
-          Ver mi nivel
+        <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13.5px' }}>{completedLabel}</span>
+        <Link href={link.href} className="btn btn-ghost ml-auto" style={{ fontSize: '11.5px', padding: '6px 11px' }}>
+          {link.label}
         </Link>
       </div>
     )
@@ -123,10 +137,14 @@ function LevelBanner({ status }: { status: LevelStatus }) {
 
   const teFaltanText =
     nextAfter === null
-      ? 'Este es el último nivel definido — sigue así'
+      ? viewer === 'mentor'
+        ? 'Este es el último nivel definido del programa'
+        : 'Este es el último nivel definido — sigue así'
       : missingParts.length > 0
-        ? `Te faltan ${missingParts.join(' y ')} para pasar al ${nextAfter.name}`
-        : `Cumple el resto de requisitos del nivel para pasar al ${nextAfter.name}`
+        ? `${viewer === 'mentor' ? 'Le faltan' : 'Te faltan'} ${missingParts.join(' y ')} para pasar al ${nextAfter.name}`
+        : viewer === 'mentor'
+          ? `Debe cumplir el resto de requisitos del nivel para pasar al ${nextAfter.name}`
+          : `Cumple el resto de requisitos del nivel para pasar al ${nextAfter.name}`
 
   return (
     // FRANJA compacta de UNA línea (rediseño ronda 15: el banner alto de 3
@@ -184,8 +202,8 @@ function LevelBanner({ status }: { status: LevelStatus }) {
         </div>
       </div>
 
-      <Link href="/mi-nivel" className="btn btn-ghost flex-none" style={{ fontSize: '11.5px', padding: '5px 10px' }}>
-        Ver mi nivel
+      <Link href={link.href} className="btn btn-ghost flex-none" style={{ fontSize: '11.5px', padding: '5px 10px' }}>
+        {link.label}
       </Link>
     </div>
   )
@@ -209,10 +227,12 @@ function LevelBanner({ status }: { status: LevelStatus }) {
  * `?nuevo=`, mes anterior/siguiente) para que funcionen igual bajo `/calendario` (alumno)
  * que bajo `/estudiantes/[id]/calendario` (mentor). `headerActions` es el hueco donde la
  * página mentor monta `StudentPicker` (Task 12) — `undefined` en las páginas de alumno, sin
- * efecto visual. `levelBanner` (Task 15) es el `LevelStatus` del ESTUDIANTE, calculado por
- * `app/(app)/calendario/page.tsx` con `computeLevelStatus` — las páginas del mentor nunca lo
- * pasan, así que el banner de nivel solo puede aparecer combinado con `!readOnly` (el mentor
- * jamás lo ve, ni siquiera si algún día se le pasara por error).
+ * efecto visual. `levelBanner` (Task 15) es el `LevelStatus` del ESTUDIANTE dueño del
+ * calendario. Desde la ronda 18 (pedido del usuario, deroga la decisión de T15 de
+ * ocultárselo al mentor) el banner se muestra SIEMPRE que se pase: la página del alumno lo
+ * calcula con `getOwnLevelStatus`, y la del mentor con `computeLevelStatus` del alumno
+ * visto — con `levelBannerLink` apuntando a `/niveles?e=` y la voz de los textos en
+ * tercera persona (`viewer` = 'mentor' cuando `readOnly`).
  */
 export function CalendarView({
   trades,
@@ -223,6 +243,7 @@ export function CalendarView({
   basePath,
   headerActions,
   levelBanner,
+  levelBannerLink,
 }: {
   trades: DbTrade[]
   y?: string
@@ -232,6 +253,8 @@ export function CalendarView({
   basePath: string
   headerActions?: ReactNode
   levelBanner?: LevelStatus
+  /** Destino del botón del banner de nivel; default '/mi-nivel' (vista del estudiante). */
+  levelBannerLink?: { href: string; label: string }
 }) {
   const { trade, nuevo, dia } = searchParams
   const { year, month } = resolveYearMonth(y, m)
@@ -265,7 +288,13 @@ export function CalendarView({
       </PageHeader>
 
       <div className="flex flex-col gap-[18px] px-[30px] pt-[22px] pb-[60px]">
-        {!readOnly && levelBanner ? <LevelBanner status={levelBanner} /> : null}
+        {levelBanner ? (
+          <LevelBanner
+            status={levelBanner}
+            link={levelBannerLink ?? { href: '/mi-nivel', label: 'Ver mi nivel' }}
+            viewer={readOnly ? 'mentor' : 'student'}
+          />
+        ) : null}
 
         {/* Resumen del mes ARRIBA del grid (rediseño ronda 15: "todo arriba
             con mejor visibilidad"; antes cerraba la página bajo el calendario). */}

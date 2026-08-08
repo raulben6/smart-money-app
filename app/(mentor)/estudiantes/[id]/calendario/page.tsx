@@ -3,6 +3,8 @@ import { requireMentor } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import { isValidUuid } from '@/lib/validation/uuid'
 import { listTradesForStudent, listStudents, getStudentById } from '@/lib/db/queries/mentor'
+import { listLevels, listGrantIdsForUser } from '@/lib/db/queries/levels'
+import { computeLevelStatus } from '@/lib/metrics/levels'
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { StudentPicker } from '@/components/shell/StudentPicker'
 import { StudentViewTabs } from '@/components/shell/StudentViewTabs'
@@ -26,12 +28,26 @@ export default async function StudentCalendarioPage({
   if (!isValidUuid(id)) notFound()
 
   const db = getDb()
-  const [student, trades, students] = await Promise.all([
+  const [student, trades, students, levels, grantedLevelIds] = await Promise.all([
     getStudentById(db, mentor.id, id),
     listTradesForStudent(db, mentor.id, id),
     listStudents(db, mentor.id),
+    listLevels(db),
+    listGrantIdsForUser(db, id),
   ])
   if (!student) notFound()
+
+  // Ronda 18 (pedido del usuario): el mentor también ve la barra de avance de
+  // nivel sobre el calendario del alumno — mismo cálculo que las vistas del
+  // estudiante, con su asignación manual y baseline (ronda 16).
+  const levelStatus = computeLevelStatus({
+    trades,
+    initialBalance: student.initialBalance ?? 0,
+    levels,
+    grantedLevelIds,
+    startPosition: student.startLevelPosition,
+    baselineNet: student.levelBaselineNet,
+  })
 
   const resolvedSearchParams = await searchParams
   const { y, m, trade, nuevo, fecha, dia } = resolvedSearchParams
@@ -46,6 +62,8 @@ export default async function StudentCalendarioPage({
         searchParams={{ trade, nuevo, fecha, dia }}
         readOnly
         basePath={basePath}
+        levelBanner={levelStatus}
+        levelBannerLink={{ href: `/niveles?e=${id}`, label: 'Administrar nivel' }}
         headerActions={
           <>
             <StudentViewTabs studentId={id} active="calendario" />
