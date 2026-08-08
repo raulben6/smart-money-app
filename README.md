@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Smart Trader Performance System
 
-## Getting Started
+Diario de trading con mentoría: un mentor invita a sus estudiantes, revisa sus
+operaciones y bitácoras, les deja retroalimentación, les asigna objetivos y
+administra su progreso por niveles.
 
-First, run the development server:
+**Producción**: https://smart-money-app-two.vercel.app
+
+## Stack
+
+- **Next.js 16** (App Router, Turbopack) + TypeScript + Tailwind v4
+- **Clerk** — autenticación (registro solo por invitación, email+contraseña y Google)
+- **Neon** (Postgres serverless) + **Drizzle ORM** — datos y migraciones (`drizzle/`)
+- **Vercel Blob** (privado) — capturas de gráficos
+- **Vitest + PGlite** — 294 tests (métricas puras + matriz de autorización sobre Postgres embebido)
+- Design system propio **Nocturne** (`styles/nocturne.css`, tokens; tema claro/oscuro esmeralda)
+
+## Desarrollo
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # requiere .env.local (Clerk, Neon, Blob, MENTOR_EMAIL, APP_URL)
+npm test           # suite completa (serial por PGlite)
+npm run db:migrate # aplica migraciones a la base de .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Flujo de trabajo
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Rama nueva por mejora → push → **Preview Deployment** automático en Vercel (URL propia para probar).
+- Merge a `master` → **despliegue a producción** automático.
+- Tags `fase-1` y `fase-2` marcan los hitos entregados.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Notas de arquitectura
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Las métricas (resumen, curva de equidad, drawdown, niveles, objetivos) son
+  **siempre derivadas** de los trades — nunca se almacenan (`lib/metrics/`).
+- Autorización en doble capa: `requireUser`/`requireMentor` en actions y
+  re-verificación de rol/propiedad **dentro** de cada query (`lib/db/queries/`).
+- Zona horaria del programa: UTC-6 (`lib/app-time.ts`) — todo cálculo de
+  calendario del lado servidor se ancla ahí, nunca a la hora del proceso.
+- `styles/nocturne.css` va deliberadamente sin `@layer` (ver su cabecera).
