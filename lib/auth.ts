@@ -55,7 +55,10 @@ export const requireUser = cache(async (): Promise<DbUser> => {
     // es la prueba explícita de que la cuenta Clerk sigue viva (fix LOW del
     // revisor: no depender solo del throw implícito de currentUser()).
     if (existing.archivedAt !== null && cu) patch.archivedAt = null
-    if (existing.role === 'student' && isMentorEmail(primaryEmail)) patch.role = 'mentor'
+    // Promoción a mentor SOLO con correo verificado (endurecimiento del
+    // security review post-fase-2): un primario sin verificar no prueba
+    // propiedad — mismo criterio que el flujo de reconexión.
+    if (existing.role === 'student' && isMentorEmail(verifiedEmail)) patch.role = 'mentor'
 
     if (Object.keys(patch).length > 0) {
       try {
@@ -86,7 +89,7 @@ export const requireUser = cache(async (): Promise<DbUser> => {
       const relinked = await relinkUserById(db, candidate.id, clerkId, name)
       if (relinked) {
         await releaseEmailClaims(db, verifiedEmail, relinked.id)
-        if (relinked.role === 'student' && isMentorEmail(primaryEmail)) {
+        if (relinked.role === 'student' && isMentorEmail(verifiedEmail)) {
           const [promoted] = await db
             .update(users)
             .set({ role: 'mentor' })
@@ -104,7 +107,7 @@ export const requireUser = cache(async (): Promise<DbUser> => {
     await releaseEmailClaims(db, verifiedEmail, null)
   }
 
-  const role = isMentorEmail(primaryEmail) ? ('mentor' as const) : ('student' as const)
+  const role = isMentorEmail(verifiedEmail) ? ('mentor' as const) : ('student' as const)
   const [created] = await db
     .insert(users)
     .values({ clerkId, name, role, email: verifiedEmail ?? null })

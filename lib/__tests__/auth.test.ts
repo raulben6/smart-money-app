@@ -38,11 +38,18 @@ const MENTOR = 'kb2813085@gmail.com'
 
 function mockClerkUser(opts: {
   primaryEmail?: string
+  /** default true — el endurecimiento del security review exige correo VERIFICADO para promover/reconectar. */
+  primaryVerified?: boolean
   otherEmails?: string[]
   firstName?: string | null
   lastName?: string | null
 }) {
-  const primary = opts.primaryEmail ? { emailAddress: opts.primaryEmail } : null
+  const primary = opts.primaryEmail
+    ? {
+        emailAddress: opts.primaryEmail,
+        verification: { status: opts.primaryVerified === false ? 'unverified' : 'verified' },
+      }
+    : null
   const emailAddresses = [...(opts.otherEmails ?? []).map((e) => ({ emailAddress: e })), ...(primary ? [primary] : [])]
   return {
     firstName: opts.firstName ?? null,
@@ -131,6 +138,22 @@ describe('requireUser: promoción por MENTOR_EMAIL (usa primaryEmailAddress, no 
 
     const [persisted] = await testDb.select().from(users).where(eq(users.id, seeded.id))
     expect(persisted.role).toBe('student')
+  })
+
+  it('primaryEmailAddress coincidente pero SIN VERIFICAR -> NO se promueve (endurecimiento del security review post-fase-2)', async () => {
+    process.env.MENTOR_EMAIL = MENTOR
+    const [seeded] = await testDb.insert(users).values({ clerkId: 'clerk_x', name: 'Karla', role: 'student' }).returning()
+    authMock.mockResolvedValue({ userId: 'clerk_x' })
+    currentUserMock.mockResolvedValue(mockClerkUser({ primaryEmail: MENTOR, primaryVerified: false, firstName: 'Karla' }))
+
+    const result = await requireUser()
+
+    expect(result.role).toBe('student')
+
+    const [persisted] = await testDb.select().from(users).where(eq(users.id, seeded.id))
+    expect(persisted.role).toBe('student')
+    // Y el correo sin verificar tampoco se persiste (regla de la ronda 17).
+    expect(persisted.email).toBeNull()
   })
 
   it('usuario nuevo con primaryEmailAddress que coincide -> nace como mentor', async () => {
