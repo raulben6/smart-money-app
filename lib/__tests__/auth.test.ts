@@ -181,6 +181,68 @@ describe('requireUser: promoción por MENTOR_EMAIL (usa primaryEmailAddress, no 
   })
 })
 
+describe('requireUser: degradación por MENTOR_EMAIL (sincronización bidireccional, Opción A)', () => {
+  it('mentor existente cuyo correo verificado ya no coincide -> se degrada a student', async () => {
+    process.env.MENTOR_EMAIL = MENTOR
+    const [seeded] = await testDb.insert(users).values({ clerkId: 'clerk_old_mentor', name: 'Viejo', role: 'mentor' }).returning()
+    authMock.mockResolvedValue({ userId: 'clerk_old_mentor' })
+    currentUserMock.mockResolvedValue(mockClerkUser({ primaryEmail: 'yanoes@ejemplo.com', firstName: 'Viejo' }))
+
+    const result = await requireUser()
+
+    expect(result.role).toBe('student')
+
+    const [persisted] = await testDb.select().from(users).where(eq(users.id, seeded.id))
+    expect(persisted.role).toBe('student')
+  })
+
+  it('mentor existente con correo coincidente -> sigue mentor', async () => {
+    process.env.MENTOR_EMAIL = MENTOR
+    await testDb.insert(users).values({ clerkId: 'clerk_m', name: 'Mentor', role: 'mentor' }).returning()
+    authMock.mockResolvedValue({ userId: 'clerk_m' })
+    currentUserMock.mockResolvedValue(mockClerkUser({ primaryEmail: MENTOR, firstName: 'Mentor' }))
+
+    const result = await requireUser()
+
+    expect(result.role).toBe('mentor')
+  })
+
+  it('MENTOR_EMAIL sin definir -> el mentor se mantiene (guard anti-bloqueo)', async () => {
+    delete process.env.MENTOR_EMAIL
+    await testDb.insert(users).values({ clerkId: 'clerk_m', name: 'Mentor', role: 'mentor' }).returning()
+    authMock.mockResolvedValue({ userId: 'clerk_m' })
+    currentUserMock.mockResolvedValue(mockClerkUser({ primaryEmail: 'cualquiera@ejemplo.com', firstName: 'Mentor' }))
+
+    const result = await requireUser()
+
+    expect(result.role).toBe('mentor')
+  })
+
+  it('MENTOR_EMAIL vacío ("") -> el mentor se mantiene (guard anti-bloqueo)', async () => {
+    process.env.MENTOR_EMAIL = ''
+    await testDb.insert(users).values({ clerkId: 'clerk_m', name: 'Mentor', role: 'mentor' }).returning()
+    authMock.mockResolvedValue({ userId: 'clerk_m' })
+    currentUserMock.mockResolvedValue(mockClerkUser({ primaryEmail: 'cualquiera@ejemplo.com', firstName: 'Mentor' }))
+
+    const result = await requireUser()
+
+    expect(result.role).toBe('mentor')
+  })
+
+  it('correo primario SIN VERIFICAR que no coincide -> NO se degrada (sin prueba de identidad no hay cambios)', async () => {
+    process.env.MENTOR_EMAIL = MENTOR
+    await testDb.insert(users).values({ clerkId: 'clerk_m', name: 'Mentor', role: 'mentor' }).returning()
+    authMock.mockResolvedValue({ userId: 'clerk_m' })
+    currentUserMock.mockResolvedValue(
+      mockClerkUser({ primaryEmail: 'yanoes@ejemplo.com', primaryVerified: false, firstName: 'Mentor' }),
+    )
+
+    const result = await requireUser()
+
+    expect(result.role).toBe('mentor')
+  })
+})
+
 describe('requireMentor', () => {
   it('con role student -> lanza el redirect mock hacia /dashboard', async () => {
     process.env.MENTOR_EMAIL = MENTOR
@@ -196,7 +258,9 @@ describe('requireMentor', () => {
     process.env.MENTOR_EMAIL = MENTOR
     const [seeded] = await testDb.insert(users).values({ clerkId: 'clerk_mentor', name: 'Mentor', role: 'mentor' }).returning()
     authMock.mockResolvedValue({ userId: 'clerk_mentor' })
-    currentUserMock.mockResolvedValue(mockClerkUser({ primaryEmail: 'otra@ejemplo.com', firstName: 'Mentor' }))
+    // Correo coincidente: con la sincronización bidireccional, un mentor cuyo
+    // correo verificado ya no coincide se degrada (y este test redirigiría).
+    currentUserMock.mockResolvedValue(mockClerkUser({ primaryEmail: MENTOR, firstName: 'Mentor' }))
 
     const result = await requireMentor()
 

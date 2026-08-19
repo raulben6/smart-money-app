@@ -59,6 +59,14 @@ export const requireUser = cache(async (): Promise<DbUser> => {
     // security review post-fase-2): un primario sin verificar no prueba
     // propiedad — mismo criterio que el flujo de reconexión.
     if (existing.role === 'student' && isMentorEmail(verifiedEmail)) patch.role = 'mentor'
+    // Sincronización bidireccional ("Opción A", 2026-08-19): un mentor cuyo
+    // correo verificado ya no coincide con MENTOR_EMAIL se degrada a student,
+    // volviendo el cambio de mentor 100% autoservicio (editar la env var +
+    // redeploy). Guards anti-bloqueo: sin MENTOR_EMAIL configurado o sin
+    // correo verificado presente (fallo de Clerk, primario sin verificar) no
+    // se degrada a nadie.
+    if (existing.role === 'mentor' && !!process.env.MENTOR_EMAIL?.trim() && verifiedEmail && !isMentorEmail(verifiedEmail))
+      patch.role = 'student'
 
     if (Object.keys(patch).length > 0) {
       try {
