@@ -6,7 +6,11 @@ import { PageHeader } from '@/components/shell/PageHeader'
 import { NotificationCard } from '@/components/notifications/NotificationCard'
 import { MarkAsRead } from '@/components/notifications/MarkAsRead'
 
-const SECTION_TITLE_CLASS = 'm-0 text-[11px] tracking-[0.13em] uppercase text-neutral-500'
+// OJO: en un <h2>, las utilidades de tamaño/margen/tracking PIERDEN contra el
+// `h2 {...}` sin capa de nocturne.css (se veía "ANTERIORES" a 32px, bug de la
+// fase 3 responsive) — el tamaño va inline, la convención del proyecto.
+const SECTION_TITLE_CLASS = 'uppercase text-neutral-500'
+const SECTION_TITLE_STYLE = { margin: 0, fontSize: '11px', letterSpacing: '0.13em' } as const
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
 const PAGE_SIZE = 50
 const MAX_LIMIT = 500
@@ -74,9 +78,11 @@ export default async function NotificacionesPage({
     <>
       <PageHeader title="Centro de notificaciones" subtitle="Retroalimentación y observaciones de tu mentor" />
 
-      <div className="flex flex-col gap-[18px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[18px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
         <form method="GET" className="flex flex-wrap items-center gap-[10px]">
-          <div className="flex items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px]">
+          {/* w-full en móvil (fase 3 responsive): los dos rangos a ancho completo
+              apilados quedan ordenados; desde sm vuelven al layout en línea. */}
+          <div className="flex w-full items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px] sm:w-auto">
             <label htmlFor="notif-desde" className="text-[11px] text-neutral-500">
               Desde
             </label>
@@ -84,12 +90,11 @@ export default async function NotificacionesPage({
               id="notif-desde"
               type="date"
               name="desde"
-              className="border-0 bg-transparent text-text text-[12px] outline-none"
-              style={{ width: '130px' }}
+              className="min-w-0 flex-1 border-0 bg-transparent text-text text-[12px] outline-none sm:w-[130px] sm:flex-none"
               defaultValue={desde ?? ''}
             />
           </div>
-          <div className="flex items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px]">
+          <div className="flex w-full items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px] sm:w-auto">
             <label htmlFor="notif-hasta" className="text-[11px] text-neutral-500">
               Hasta
             </label>
@@ -97,8 +102,7 @@ export default async function NotificacionesPage({
               id="notif-hasta"
               type="date"
               name="hasta"
-              className="border-0 bg-transparent text-text text-[12px] outline-none"
-              style={{ width: '130px' }}
+              className="min-w-0 flex-1 border-0 bg-transparent text-text text-[12px] outline-none sm:w-[130px] sm:flex-none"
               defaultValue={hasta ?? ''}
             />
           </div>
@@ -127,7 +131,7 @@ export default async function NotificacionesPage({
           <>
             {nuevas.length > 0 && (
               <section className="flex flex-col gap-[10px]">
-                <h2 className={SECTION_TITLE_CLASS}>Nuevas</h2>
+                <h2 className={SECTION_TITLE_CLASS} style={SECTION_TITLE_STYLE}>Nuevas</h2>
                 <div className="flex flex-col gap-[10px]" style={{ maxWidth: '840px' }}>
                   {nuevas.map((n) => (
                     <NotificationCard key={n.id} notification={n} now={now} unread />
@@ -138,7 +142,7 @@ export default async function NotificacionesPage({
 
             {anteriores.length > 0 && (
               <section className="flex flex-col gap-[10px]">
-                <h2 className={SECTION_TITLE_CLASS}>Anteriores</h2>
+                <h2 className={SECTION_TITLE_CLASS} style={SECTION_TITLE_STYLE}>Anteriores</h2>
                 <div className="flex flex-col gap-[10px]" style={{ maxWidth: '840px' }}>
                   {anteriores.map((n) => (
                     <NotificationCard key={n.id} notification={n} now={now} unread={false} />

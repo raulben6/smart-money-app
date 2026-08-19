@@ -84,7 +84,7 @@ export default async function MensajesPage({
     <>
       <PageHeader title="Mensajes enviados" subtitle="Retroalimentación que le has dejado a tus estudiantes" />
 
-      <div className="flex flex-col gap-[16px] px-[30px] pt-[26px] pb-[60px]" style={{ maxWidth: '840px' }}>
+      <div className="flex flex-col gap-[16px] px-4 sm:px-[30px] pt-[26px] pb-[60px]" style={{ maxWidth: '840px' }}>
         <form method="GET" className="flex flex-wrap items-center gap-[10px]">
           <div className="flex items-center gap-[8px] rounded-[8px] border border-neutral-800 px-[10px] py-[6px]">
             <label htmlFor="mensajes-estudiante" className="text-[11px] text-neutral-500">

@@ -287,7 +287,7 @@ export function CalendarView({
         )}
       </PageHeader>
 
-      <div className="flex flex-col gap-[18px] px-[30px] pt-[22px] pb-[60px]">
+      <div className="flex flex-col gap-[18px] px-4 sm:px-[30px] pt-[22px] pb-[60px]">
         {levelBanner ? (
           <LevelBanner
             status={levelBanner}

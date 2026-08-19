@@ -921,7 +921,9 @@ function ReadOnlyJournal({
   return (
     <section className="flex flex-col gap-[14px]" style={hidden ? { display: 'none' } : undefined}>
       <div className="flex flex-wrap items-baseline gap-[10px]">
-        <h3 className="m-0 text-[11px] tracking-[0.13em] uppercase text-neutral-500">Bitácora de la operación</h3>
+        <h3 className="uppercase text-neutral-500" style={{ margin: 0, fontSize: '11px', letterSpacing: '0.13em' }}>
+          Bitácora de la operación
+        </h3>
       </div>
 
       <div className="grid gap-[12px]" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>

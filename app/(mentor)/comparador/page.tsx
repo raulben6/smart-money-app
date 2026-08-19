@@ -22,7 +22,7 @@ export default async function ComparadorPage({ searchParams }: { searchParams: P
     return (
       <>
         <PageHeader title="Comparador de estudiantes" subtitle="Selecciona a quién comparar y sobre qué métricas" />
-        <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+        <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
             <h2 style={{ margin: 0, fontSize: '16px' }}>Aún no tienes estudiantes</h2>
             <p className="m-0 text-[13px] text-neutral-400">
@@ -46,7 +46,7 @@ export default async function ComparadorPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader title="Comparador de estudiantes" subtitle="Selecciona a quién comparar y sobre qué métricas" />
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
         <CompareChips students={stats.map((x) => ({ id: x.student.id, name: x.student.name }))} selectedIds={selectedIds} />
         <CompareBars stats={selectedStats} />
       </div>

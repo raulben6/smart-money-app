@@ -23,7 +23,7 @@ export default async function PanelPage() {
     return (
       <>
         <PageHeader title="Panel general" subtitle="Cómo va el grupo completo de estudiantes" />
-        <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+        <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
             <h2 style={{ margin: 0, fontSize: '16px' }}>Aún no tienes estudiantes</h2>
             <p className="m-0 text-[13px] text-neutral-400">
@@ -75,8 +75,11 @@ export default async function PanelPage() {
   return (
     <>
       <PageHeader title="Panel general" subtitle="Cómo va el grupo completo de estudiantes" />
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+      <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
+        {/* 2 columnas en móvil (fase 3 responsive): el auto-fit apilaba las 5
+            tarjetas a una columna en teléfonos y el ranking quedaba 3 pantallas
+            abajo. En ≥1024 vuelve el auto-fit original (5 en línea si caben). */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
           {cards.map((card) => (
             <div key={card.label} className="card" style={{ padding: '16px 17px', gap: '8px' }}>
               <span className="text-[10.5px] uppercase tracking-[0.1em] text-neutral-500">{card.label}</span>

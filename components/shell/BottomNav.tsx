@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
-import { ChartLineUp, CalendarBlank, Bell, Plus, type Icon } from '@phosphor-icons/react'
+import { ChartLineUp, CalendarBlank, Bell, Target, Plus, type Icon } from '@phosphor-icons/react'
 import { NotificationBadge } from './NotificationBadge'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -17,8 +17,14 @@ export function BottomNav({ unreadCount }: { unreadCount: number }) {
       aria-label="Navegación principal"
       className="sidebar-scope fixed inset-x-0 bottom-0 z-20 border-t border-neutral-800 bg-sidebar pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
-      <div className="flex h-14 items-center justify-around">
+      {/* max-w en tablet (fase 3 responsive): a 768px el justify-around dispersaba
+          los iconos con huecos enormes; centrado queda ordenado. "Objetivos" se
+          añade porque en móvil no tenía ningún punto de entrada (solo sidebar).
+          "Mi nivel" sigue accesible desde la barra de nivel del calendario. */}
+      <div className="mx-auto flex h-14 w-full max-w-xl items-center justify-around">
         <NavItem href="/dashboard" label="Dashboard" Icon={ChartLineUp} active={isActive('/dashboard')} />
+
+        <NavItem href="/calendario" label="Calendario" Icon={CalendarBlank} active={isActive('/calendario')} />
 
         <Link
           href="/calendario?nuevo=1"
@@ -29,7 +35,7 @@ export function BottomNav({ unreadCount }: { unreadCount: number }) {
           <Plus size={18} aria-hidden />
         </Link>
 
-        <NavItem href="/calendario" label="Calendario" Icon={CalendarBlank} active={isActive('/calendario')} />
+        <NavItem href="/objetivos" label="Objetivos" Icon={Target} active={isActive('/objetivos')} />
 
         <NavItem
           href="/notificaciones"

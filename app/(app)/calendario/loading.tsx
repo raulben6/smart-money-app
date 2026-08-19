@@ -7,7 +7,7 @@ const WEEK_ROWS = 5
  */
 export default function CalendarioLoading() {
   return (
-    <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]" aria-busy="true">
+    <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]" aria-busy="true">
       <span className="sr-only">Cargando…</span>
 
       <div className="flex items-center gap-[8px]" aria-hidden="true">

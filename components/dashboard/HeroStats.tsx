@@ -31,7 +31,9 @@ export function HeroStats({ summary, initialBalance }: { summary: Summary; initi
   ]
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
+    // Columnas explícitas (fase 3 responsive): el auto-fit dejaba una tarjeta
+    // huérfana (3+1) entre 640px y 1279px. 2×2 en tablet, 4 en escritorio ancho.
+    <div className="grid grid-cols-1 min-[440px]:grid-cols-2 xl:grid-cols-4 gap-3">
       {cards.map((card) => (
         <div key={card.label} className="card" style={{ padding: '16px 17px', gap: '9px' }}>
           <span className="text-[10.5px] uppercase tracking-[0.1em] text-neutral-500">{card.label}</span>

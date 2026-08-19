@@ -36,7 +36,7 @@ export default async function ObjetivosEstudiantesPage({
     return (
       <>
         <PageHeader title="Objetivos" subtitle="Asigna y da seguimiento a los objetivos del estudiante" />
-        <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+        <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
             <h2 style={{ margin: 0, fontSize: '16px' }}>Aún no tienes estudiantes</h2>
             <p className="m-0 text-[13px] text-neutral-400">
@@ -95,7 +95,7 @@ export default async function ObjetivosEstudiantesPage({
         </Link>
       </PageHeader>
 
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
         {goals.length === 0 ? (
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
             <h2 style={{ margin: 0, fontSize: '16px' }}>{student.name} aún no tiene objetivos</h2>

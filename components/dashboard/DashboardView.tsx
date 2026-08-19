@@ -90,7 +90,7 @@ export function DashboardView({
       {/* F2-T15: banner de progreso de nivel del estudiante (solo cuando !readOnly) — esta tarea deja el hueco, no lo implementa. */}
 
       {trades.length === 0 ? (
-        <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+        <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
             <h2 style={{ margin: 0, fontSize: '16px' }}>
               {readOnly ? 'Este alumno aún no registra operaciones' : 'Aún no registras operaciones'}
@@ -159,7 +159,7 @@ function DashboardBody({
   const recent = trades.slice(0, 6)
 
   return (
-    <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+    <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
       <HeroStats summary={summary} initialBalance={initialBalance} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)]">

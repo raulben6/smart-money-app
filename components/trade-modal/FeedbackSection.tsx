@@ -106,7 +106,10 @@ export function FeedbackSection({ studentId, tradeId }: { studentId: string; tra
       className="flex flex-col gap-[10px]"
       style={{ borderTop: '1px solid var(--color-neutral-800)', paddingTop: '16px' }}
     >
-      <h3 className="m-0 text-[11px] tracking-[0.13em] uppercase" style={{ color: 'var(--color-accent-300)' }}>
+      <h3
+        className="uppercase"
+        style={{ color: 'var(--color-accent-300)', margin: 0, fontSize: '11px', letterSpacing: '0.13em' }}
+      >
         Retroalimentación del mentor
       </h3>
 

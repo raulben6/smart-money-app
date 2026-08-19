@@ -5,7 +5,7 @@
  */
 export default function DashboardLoading() {
   return (
-    <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]" aria-busy="true">
+    <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]" aria-busy="true">
       <span className="sr-only">Cargando…</span>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3" aria-hidden="true">

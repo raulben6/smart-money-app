@@ -39,7 +39,7 @@ export default async function NivelesPage({ searchParams }: { searchParams: Prom
         ) : null}
       </PageHeader>
 
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
         {hasStudents && studentId ? (
           <LevelAssign
             key={studentId}

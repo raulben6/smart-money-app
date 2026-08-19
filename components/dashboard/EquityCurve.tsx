@@ -22,10 +22,10 @@ export function EquityCurve({
 
   return (
     <div className="card" style={{ padding: '18px 20px', gap: '14px' }}>
-      <div className="flex items-baseline gap-3">
-        <h2 style={{ margin: 0, fontSize: '14px' }}>Curva de crecimiento</h2>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h2 className="whitespace-nowrap" style={{ margin: 0, fontSize: '14px' }}>Curva de crecimiento</h2>
         <span className="text-[11.5px] text-neutral-500">Últimos 30 días de operativa</span>
-        <span className={`ml-auto text-[12px] tabular-nums ${positive ? 'text-pos' : 'text-neg'}`}>
+        <span className={`ml-auto whitespace-nowrap text-[12px] tabular-nums ${positive ? 'text-pos' : 'text-neg'}`}>
           {signedMoney(periodNet)} en el periodo
         </span>
       </div>

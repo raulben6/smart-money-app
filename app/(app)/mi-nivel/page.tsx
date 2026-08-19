@@ -24,7 +24,7 @@ export default async function MiNivelPage() {
     <>
       <PageHeader title="Mi progreso por niveles" subtitle="Cada nivel se desbloquea con resultados, no con tiempo" />
 
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
         <LevelProgressCard status={status} />
         <LevelCarousel status={status} />
       </div>

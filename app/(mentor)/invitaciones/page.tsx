@@ -43,7 +43,7 @@ export default async function InvitacionesPage() {
     <>
       <PageHeader title="Invitaciones" subtitle="Invita a tus estudiantes por correo — recibirán un enlace para registrarse" />
 
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
         <InviteForm />
 
         <div className="card" style={{ padding: '18px 20px', gap: '12px' }}>
