@@ -5,7 +5,7 @@
  */
 export function ComingSoonCard({ message }: { message?: string }) {
   return (
-    <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+    <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
       <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
         <h2 style={{ margin: 0, fontSize: '16px' }}>Próximamente</h2>
         <p className="m-0 text-[13px] text-neutral-400">

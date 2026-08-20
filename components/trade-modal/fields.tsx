@@ -107,7 +107,13 @@ export function FieldGrid({ children }: { children: ReactNode }) {
 
 /** Título de sección — 11px, mayúsculas, tracking amplio (mockup 439/460/474/489). */
 export function SectionTitle({ children }: { children: ReactNode }) {
-  return <h3 className="m-0 text-[11px] tracking-[0.13em] uppercase text-neutral-500">{children}</h3>
+  // Tamaño/margen inline: las utilidades pierden contra el `h3 {}` sin capa de
+  // nocturne.css (este título salía a 25px — bug cazado en fase 3 responsive).
+  return (
+    <h3 className="uppercase text-neutral-500" style={{ margin: 0, fontSize: '11px', letterSpacing: '0.13em' }}>
+      {children}
+    </h3>
+  )
 }
 
 function ToggleButton({

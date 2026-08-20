@@ -28,7 +28,8 @@ export function RecentTrades({ trades, basePath, calendarHref }: { trades: DbTra
               <th scope="col" className="text-left">Fecha</th>
               <th scope="col" className="text-left">Activo</th>
               <th scope="col" className="text-left">Dir.</th>
-              <th scope="col" className="text-left">Setup</th>
+              {/* En móvil el setup se oculta para que R y P&L (lo importante) entren sin scroll. */}
+              <th scope="col" className="hidden text-left sm:table-cell">Setup</th>
               <th scope="col" className="text-right">R</th>
               <th scope="col" className="text-right">P&amp;L</th>
             </tr>
@@ -64,7 +65,7 @@ export function RecentTrades({ trades, basePath, calendarHref }: { trades: DbTra
                       </span>
                     </Link>
                   </td>
-                  <td style={{ color: 'var(--color-neutral-400)' }}>
+                  <td className="hidden sm:table-cell" style={{ color: 'var(--color-neutral-400)' }}>
                     <Link href={href} style={LINK_STYLE}>
                       {t.setup}
                     </Link>

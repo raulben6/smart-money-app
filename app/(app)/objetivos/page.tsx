@@ -25,7 +25,7 @@ export default async function ObjetivosPage() {
     <>
       <PageHeader title="Objetivos" subtitle="Lo que tu mentor definió para ti este ciclo" />
 
-      <div className="flex flex-col gap-[22px] px-[30px] pt-[26px] pb-[60px]">
+      <div className="flex flex-col gap-[22px] px-4 sm:px-[30px] pt-[26px] pb-[60px]">
         {goals.length === 0 ? (
           <div className="card items-center gap-[10px] text-center" style={{ padding: '48px 24px' }}>
             <h2 style={{ margin: 0, fontSize: '16px' }}>Tu mentor aún no te asigna objetivos</h2>

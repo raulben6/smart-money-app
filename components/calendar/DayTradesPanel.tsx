@@ -85,9 +85,12 @@ export function DayTradesPanel({
                 >
                   {isLong ? 'Long' : 'Short'}
                 </span>
-                <span className="truncate text-[12px] text-neutral-400" style={{ flex: 1, minWidth: 0 }}>
+                {/* En <480px el setup se oculta: truncado a ~5 caracteres no aporta
+                    y el P&L/R (lo importante) necesita el espacio. */}
+                <span className="hidden min-[480px]:block truncate text-[12px] text-neutral-400" style={{ flex: 1, minWidth: 0 }}>
                   {t.setup}
                 </span>
+                <span className="min-[480px]:hidden" style={{ flex: 1 }} />
                 <span className="tabular-nums text-[12px]" style={{ color: pnlColor, minWidth: '40px', textAlign: 'right' }}>
                   {t.rMultiple === null ? '—' : `${t.rMultiple > 0 ? '+' : ''}${t.rMultiple.toFixed(1)}R`}
                 </span>

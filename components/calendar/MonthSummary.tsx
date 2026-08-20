@@ -26,7 +26,9 @@ export function MonthSummary({ summary }: { summary: Summary }) {
   ]
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
+    // 2×2 fijo en móvil (fase 3 responsive): el auto-fit de 160px caía a UNA
+    // columna a 360px (4 tarjetas apiladas empujaban el calendario 2 pantallas).
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
       {cards.map((c) => (
         <div key={c.label} className="card" style={{ padding: '14px 16px', gap: '6px' }}>
           <span className="text-[10.5px] uppercase tracking-[0.1em] text-neutral-500">{c.label}</span>

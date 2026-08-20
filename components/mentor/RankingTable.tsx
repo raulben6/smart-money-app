@@ -39,9 +39,19 @@ export function RankingTable({ stats }: { stats: StudentStats[] }) {
               return (
                 <tr key={s.student.id}>
                   <td style={{ color: 'var(--color-neutral-500)' }}>{String(i + 1).padStart(2, '0')}</td>
-                  <td>{s.student.name}</td>
                   <td>
-                    <span className="tag tag-outline" style={{ fontSize: '10px' }}>
+                    {/* Enlace con color heredado (mismo patrón que RecentTrades): en móvil
+                        el botón "Abrir" queda tras el scroll horizontal — el nombre siempre
+                        visible también abre al alumno. */}
+                    <Link
+                      href={`/estudiantes/${s.student.id}/dashboard`}
+                      style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
+                    >
+                      {s.student.name}
+                    </Link>
+                  </td>
+                  <td>
+                    <span className="tag tag-outline whitespace-nowrap" style={{ fontSize: '10px' }}>
                       {s.levelName}
                     </span>
                   </td>

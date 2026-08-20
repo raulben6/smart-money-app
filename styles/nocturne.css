@@ -228,6 +228,11 @@ h4 { font-size: 20px; }
 h5 { font-size: 16px; }
 h6 { font-size: 13px; }
 h6 { letter-spacing: 0.08em; text-transform: uppercase; }
+/* Título del PageHeader del shell (fase 3 responsive): 42px es el look
+   aprobado de escritorio, pero en teléfonos partía en 3 líneas. Regla AQUÍ
+   (sin capa) porque las utilidades text-[..] pierden contra el h1 de arriba. */
+.page-title { font-size: 25px; }
+@media (min-width: 640px) { .page-title { font-size: 42px; } }
 p { margin: 0 0 var(--space-3); }
 a { color: var(--color-accent); text-underline-offset: 3px; }
 img { display: block; max-width: 100%; }
@@ -418,6 +423,12 @@ select option, select optgroup {
   width: min(440px, 100%); display: flex; flex-direction: column; gap: var(--space-3);
   padding: var(--space-4); border-radius: var(--radius-lg);
   background: var(--color-surface); box-shadow: var(--shadow-lg);
+  /* Fase 3 responsive: el backdrop es un grid con track auto → el 100% de
+     arriba resuelve contra el track inflado por el min-content del contenido
+     (medido: 389.7px en un viewport de 360). El tope en unidades de viewport
+     rompe esa circularidad; el contenido interno debe truncarse, no empujar. */
+  max-width: calc(100vw - 2 * var(--space-4));
+  max-width: calc(100dvw - 2 * var(--space-4));
 }
 .dialog-title {
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);

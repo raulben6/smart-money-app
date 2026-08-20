@@ -96,9 +96,16 @@ export function MonthGrid({
           background: color-mix(in oklab, var(--neg) 12%, transparent);
         }
         .cal-day-static:hover { border-color: var(--color-neutral-800); transform: none; }
+        .cal-amt { font-family: var(--font-heading); font-weight: 500; font-size: 15px; }
+        /* Fase 3 responsive: a <640px la celda mide ~41px; con padding de 10px y
+           monto a 15px el número se salía del borde. Compactar, no desbordar. */
+        @media (max-width: 639.9px) {
+          .cal-day { padding: 5px 4px; gap: 2px; border-radius: 8px; }
+          .cal-amt { font-size: 10px; letter-spacing: -0.02em; }
+        }
       `}</style>
 
-      <div className="grid grid-cols-7 gap-[7px]">
+      <div className="grid grid-cols-7 gap-1 sm:gap-[7px]">
         {WEEKDAYS.map((w) => (
           <div key={w} className="px-1 pt-[2px] pb-[6px] text-[10px] uppercase tracking-[0.12em] text-neutral-500">
             {w}
@@ -161,13 +168,8 @@ export function MonthGrid({
               {has ? (
                 <>
                   <span
-                    className="tabular-nums"
-                    style={{
-                      fontFamily: 'var(--font-heading)',
-                      fontWeight: 500,
-                      fontSize: '15px',
-                      color: positive ? 'var(--pos)' : 'var(--neg)',
-                    }}
+                    className="cal-amt tabular-nums"
+                    style={{ color: positive ? 'var(--pos)' : 'var(--neg)' }}
                   >
                     <span className="hidden sm:inline">{signedMoney(pnl)}</span>
                     <span className="sm:hidden">{compactPnl(pnl)}</span>

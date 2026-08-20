@@ -85,9 +85,11 @@ export function LevelProgressCard({ status }: { status: LevelStatus }) {
         >
           {level.position}
         </div>
-        <div className="flex flex-col gap-[4px]">
+        <div className="flex min-w-0 flex-col gap-[4px]">
           <span style={{ fontFamily: 'var(--font-heading)', fontSize: '17px' }}>{level.name}</span>
-          <span className="text-[12px] text-neutral-400">
+          {/* En móvil este texto bajaba a una columna de ~120px con 8 líneas —
+              ahí se oculta y se muestra la copia de ancho completo de abajo. */}
+          <span className="hidden text-[12px] text-neutral-400 sm:inline">
             {allDone ? 'Completaste este nivel' : `Objetivo del nivel: ${levelGoalText(level)}`}
           </span>
         </div>
@@ -98,6 +100,10 @@ export function LevelProgressCard({ status }: { status: LevelStatus }) {
           <div className="text-[11px] text-neutral-500">completado</div>
         </div>
       </div>
+
+      <span className="m-0 text-[12px] text-neutral-400 sm:hidden" style={{ marginTop: '-8px' }}>
+        {allDone ? 'Completaste este nivel' : `Objetivo del nivel: ${levelGoalText(level)}`}
+      </span>
 
       <div className="h-[8px] overflow-hidden rounded-[5px]" style={{ background: 'var(--color-neutral-800)' }}>
         <div
