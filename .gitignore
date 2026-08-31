@@ -51,3 +51,11 @@ next-env.d.ts
 
 # Allow the template (real .env files stay ignored above)
 !.env.example
+
+# AI assistant working files (kept local, not part of the project)
+CLAUDE.md
+AGENTS.md
+.claude/
+.agents/
+.superpowers/
+skills-lock.json
