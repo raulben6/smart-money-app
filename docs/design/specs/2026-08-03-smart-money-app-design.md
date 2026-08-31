@@ -1,4 +1,4 @@
-# Smart Money App — Diseño técnico
+# Smart Money App: Diseño técnico
 
 **Fecha:** 2026-08-03
 **Estado:** Aprobado por el usuario (Fase 1)
@@ -12,7 +12,7 @@ Requisitos transversales del usuario: **app web segura, responsive y muy profesi
 
 ## 2. Alcance
 
-### Fase 1 (este spec — se construye ahora)
+### Fase 1 (este spec: se construye ahora)
 - Autenticación: correo+contraseña y Google (Clerk). Registro de estudiantes **solo por invitación** del mentor.
 - Onboarding mínimo: capturar balance inicial de la cuenta.
 - Dashboard del estudiante: 4 tarjetas hero (Balance, P&L acumulado, Profit Factor, Expectancy), curva de crecimiento (30 días), dona de Win Rate + estadísticas de calidad, barras de rendimiento mensual, tabla de últimas operaciones.
@@ -72,10 +72,10 @@ styles/nocturne.css         ← tokens del design system
 
 ## 5. Modelo de datos (Drizzle / Postgres)
 
-- **`users`** — `id` (uuid), `clerk_id` (unique), `role` (`student`|`mentor`), `name`, `initial_balance` (numeric), `created_at`. El rol se lee SIEMPRE de esta tabla en el servidor, nunca del cliente.
-- **`trades`** — `id`, `user_id` → users, `trade_date` (date), `asset` (text), `market` (enum: `indices`|`acciones`|`opciones`|`futuros`|`forex`|`cripto`), `direction` (`long`|`short`), `entry_time`/`exit_time` (time, opcionales), `entry_price`/`exit_price` (numeric), `contracts` (numeric), `position_size` (numeric), `stop_loss`/`take_profit` (numeric, opcionales), `risk_usd`/`risk_pct` (numeric, opcionales), `pnl_usd` (numeric, requerido), `r_multiple` (numeric, opcional), `setup` (text), `timeframe` (text), `market_conditions`/`entry_type`/`confirmations` (text, opcionales), `created_at`, `updated_at`. Índices: `(user_id, trade_date)`.
-- **`trade_journals`** — `trade_id` (pk/fk), 6 columnas text (`why_took`, `what_saw`, `followed_plan`, `did_well`, `did_wrong`, `improve`), `emotions` (jsonb `{antes:[],durante:[],despues:[]}` con vocabulario fijo: Calma, Confianza, FOMO, Ansiedad, Impaciencia, Frustración, Enfoque), `updated_at`.
-- **`trade_captures`** — `id`, `trade_id` → trades, `phase` (`before`|`after`), `blob_pathname`, `content_type`, `created_at`. Máximo 1 por fase y trade (unique `(trade_id, phase)`).
+- **`users`**: `id` (uuid), `clerk_id` (unique), `role` (`student`|`mentor`), `name`, `initial_balance` (numeric), `created_at`. El rol se lee SIEMPRE de esta tabla en el servidor, nunca del cliente.
+- **`trades`**: `id`, `user_id` → users, `trade_date` (date), `asset` (text), `market` (enum: `indices`|`acciones`|`opciones`|`futuros`|`forex`|`cripto`), `direction` (`long`|`short`), `entry_time`/`exit_time` (time, opcionales), `entry_price`/`exit_price` (numeric), `contracts` (numeric), `position_size` (numeric), `stop_loss`/`take_profit` (numeric, opcionales), `risk_usd`/`risk_pct` (numeric, opcionales), `pnl_usd` (numeric, requerido), `r_multiple` (numeric, opcional), `setup` (text), `timeframe` (text), `market_conditions`/`entry_type`/`confirmations` (text, opcionales), `created_at`, `updated_at`. Índices: `(user_id, trade_date)`.
+- **`trade_journals`**: `trade_id` (pk/fk), 6 columnas text (`why_took`, `what_saw`, `followed_plan`, `did_well`, `did_wrong`, `improve`), `emotions` (jsonb `{antes:[],durante:[],despues:[]}` con vocabulario fijo: Calma, Confianza, FOMO, Ansiedad, Impaciencia, Frustración, Enfoque), `updated_at`.
+- **`trade_captures`**: `id`, `trade_id` → trades, `phase` (`before`|`after`), `blob_pathname`, `content_type`, `created_at`. Máximo 1 por fase y trade (unique `(trade_id, phase)`).
 
 ### Fase 2 (migraciones futuras, no se crean ahora)
 `goals` (user_id, nombre, descripción, tipo de métrica, valor objetivo, fecha límite, estado), `levels` (definición 1–5 con requisitos), `user_levels` (progreso), `notifications` (user_id, autor, tipo, título, cuerpo, trade_id opcional, leída_en).
@@ -98,7 +98,7 @@ styles/nocturne.css         ← tokens del design system
 
 - **Nocturne se respeta al pie de la letra**: tokens (`--color-*`, ramps 100–900 OKLCH, `--font-*` Inter, `--space-*`, `--radius-*`, `--shadow-*`) importados a `styles/nocturne.css` y mapeados a Tailwind v4 con `@theme`. Reglas clave: acento #9184d9 como línea/brillo (nunca relleno masivo), botones delineados, `:focus-visible` con anillo de acento, estados hover/pressed desde las ramps, densidad compacta 0.7×, positivo `oklch(0.76 0.11 162)` / negativo `oklch(0.68 0.15 22)`.
 - **Iconos**: Phosphor Icons.
-- **Gráficas**: componentes SVG propios (curva con área degradada y animación de trazo, dona de Win Rate, barras mensuales) — fieles al mockup, sin librería de charts.
+- **Gráficas**: componentes SVG propios (curva con área degradada y animación de trazo, dona de Win Rate, barras mensuales), fieles al mockup, sin librería de charts.
 - **Breakpoints**: escritorio ≥1024px = sidebar 236px fija; tablet 640–1024 = sidebar colapsada a iconos; móvil <640 = nav inferior fija (Dashboard, Calendario, + Registrar, Notificaciones, Perfil), tarjetas a una columna, tablas con scroll horizontal dentro de su tarjeta, calendario con celdas compactas (día + P&L abreviado), modal de trade como hoja a pantalla completa.
 - **Accesibilidad**: contraste según las reglas de Nocturne (texto acento en `--color-accent-300`), navegación por teclado completa en el asistente y el calendario, `aria-label` en iconografía.
 
