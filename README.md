@@ -18,7 +18,7 @@ Next.js 16 · React 19 · TypeScript · Drizzle ORM · Neon Postgres · Clerk ·
 
 Summary statistics, the equity curve, drawdown, level status and goal progress are computed from the trades on every read (`lib/metrics/`). Nothing is denormalized into a totals column.
 
-Storing aggregates would mean every edited, deleted or back-dated trade has to correctly update a cached number somewhere — and the first time that fails, a student's reported performance silently diverges from their actual performance. Deriving costs a little compute and makes an entire class of bug impossible.
+Storing aggregates would mean every edited, deleted or back-dated trade has to correctly update a cached number somewhere, and the first time that fails, a student's reported performance silently diverges from their actual performance. Deriving costs a little compute and makes an entire class of bug impossible.
 
 ### 🔐 Authorization is enforced twice, on purpose
 
@@ -32,7 +32,7 @@ The action layer answers *"can you call this?"*; the query layer independently a
 This is the part most worth testing, so it is tested exhaustively:
 
 ```bash
-npm test    # 302 tests — pure metric functions + the authorization matrix on PGlite
+npm test    # 302 tests: pure metric functions + the authorization matrix on PGlite
 ```
 
 **PGlite** runs a real Postgres in-process, so the authorization tests execute genuine SQL against a genuine schema instead of a mocked ORM. A mock would happily confirm behaviour the real database does not have.
@@ -40,14 +40,14 @@ npm test    # 302 tests — pure metric functions + the authorization matrix on 
 ### 🕓 Program time is anchored to UTC-6, never to process time
 
 ```ts
-// lib/app-time.ts — every server-side calendar computation goes through here
+// lib/app-time.ts: every server-side calendar computation goes through here
 ```
 
 Trading days, streaks and calendar views belong to the program's timezone, not to whatever region a serverless function happens to boot in. Anchoring explicitly means a deploy to a different region can't shift which day a trade lands on.
 
 ### 🖼️ Chart screenshots are private by default
 
-Uploads go to **Vercel Blob** with private access and are served through an authorized route handler (`app/api/captures/[id]/route.ts`) rather than a public URL. A student's screenshots carry their account details and P&L — a guessable public link would leak them.
+Uploads go to **Vercel Blob** with private access and are served through an authorized route handler (`app/api/captures/[id]/route.ts`) rather than a public URL. A student's screenshots carry their account details and P&L, so a guessable public link would leak them.
 
 ---
 
@@ -87,7 +87,7 @@ Schema and versioned migrations live in `lib/db/schema.ts` and `drizzle/`, manag
 
 ## Design system
 
-**Nocturne** — a first-party token set in `styles/nocturne.css` (emerald light/dark themes), not a UI kit dropped in. It deliberately avoids `@layer`; the reasoning is documented at the top of the file.
+**Nocturne** is a first-party token set in `styles/nocturne.css` (emerald light/dark themes), not a UI kit dropped in. It deliberately avoids `@layer`; the reasoning is documented at the top of the file.
 
 ---
 
@@ -104,14 +104,14 @@ cp .env.example .env.local   # fill in the values below
 npm run db:migrate           # apply Drizzle migrations
 npm run dev                  # http://localhost:3000
 
-npm test                     # 302 tests (serial — PGlite)
+npm test                     # 302 tests (serial, PGlite)
 ```
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Neon / PostgreSQL connection string |
 | `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Authentication |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob — chart captures |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob, chart captures |
 | `MENTOR_EMAIL` | The account bootstrapped with the mentor role |
 | `APP_URL` | Absolute base URL used in invitation emails |
 
