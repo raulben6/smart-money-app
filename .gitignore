@@ -48,3 +48,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Allow the template (real .env files stay ignored above)
+!.env.example
