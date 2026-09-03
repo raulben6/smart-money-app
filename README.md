@@ -10,6 +10,14 @@ Next.js 16 · React 19 · TypeScript · Drizzle ORM · Neon Postgres · Clerk ·
 
 > **302 tests**, including a full authorization matrix executed against an embedded Postgres instance.
 
+### ▶️ [See it running](https://smart-money-app-two.vercel.app)
+
+[![Live](https://img.shields.io/badge/%F0%9F%9F%A2_deployed-smart--money--app--two.vercel.app-10B981?style=for-the-badge)](https://smart-money-app-two.vercel.app)
+
+![Sign in](docs/screenshots/01-sign-in.jpg)
+
+Registration is **invitation-only by design**: the mentor sends invitations from the `invitaciones` screen, and `/sign-up` returns "acceso restringido" to anyone without one. That is the product working as intended, not a wall to get past, so there is no open demo account for this one.
+
 ---
 
 ## The engineering decisions worth reading
