@@ -14,9 +14,32 @@ Next.js 16 · React 19 · TypeScript · Drizzle ORM · Neon Postgres · Clerk ·
 
 [![Live](https://img.shields.io/badge/%F0%9F%9F%A2_deployed-smart--money--app--two.vercel.app-10B981?style=for-the-badge)](https://smart-money-app-two.vercel.app)
 
-![Sign in](docs/screenshots/01-sign-in.jpg)
+Registration is **invitation-only by design**: the mentor sends invitations from the `invitaciones` screen, and `/sign-up` returns "acceso restringido" to anyone without one. That is the product working as intended, so the screenshots below come from a local instance with seeded data instead of an open demo account.
 
-Registration is **invitation-only by design**: the mentor sends invitations from the `invitaciones` screen, and `/sign-up` returns "acceso restringido" to anyone without one. That is the product working as intended, not a wall to get past, so there is no open demo account for this one.
+![Student dashboard](docs/screenshots/03-dashboard.jpg)
+
+**The student dashboard.** Balance, cumulative P&L, profit factor and expectancy, a growth curve with its real drawdowns, win rate with the average win and loss behind it, monthly performance, and the latest trades with their R multiple. Every one of those numbers is computed from the trades on read, never stored.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/04-calendario.jpg" alt="Trading calendar with level progress"></td>
+<td width="50%"><img src="docs/screenshots/02-panel-mentor.jpg" alt="Mentor overview panel"></td>
+</tr>
+<tr>
+<td><b>Trading calendar.</b> Every day coloured by result, with the level progress bar on top: "$658 to go before Escalado".</td>
+<td><b>Mentor panel.</b> The whole cohort at a glance: average return, win rate, profit factor, and who needs attention.</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/05-niveles.jpg" alt="Level configuration"></td>
+<td width="50%"><img src="docs/screenshots/01-sign-in.jpg" alt="Sign in"></td>
+</tr>
+<tr>
+<td><b>Level design.</b> Each level sets a profit goal, a minimum profit factor, a minimum number of trades and a maximum drawdown. Promotion is earned against all four.</td>
+<td><b>Sign in.</b> Clerk with email or Google, invitation-only.</td>
+</tr>
+</table>
+
+> Screenshots are from a local instance seeded with 96 synthetic trades (53% win rate, 1.51 profit factor). No real student data is shown.
 
 ---
 
